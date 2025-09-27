@@ -6,6 +6,8 @@ from math import sin, cos, radians
 from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
 import pytz
+# --- NUOVA IMPORTAZIONE ---
+from streamlit_js_eval import streamlit_js_eval
 
 # --- CONFIGURAZIONE GITHUB ---
 GITHUB_USER = "angelo79"
@@ -18,13 +20,13 @@ url_airports = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/{BR
 url_limits = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/{BRANCH}/{PATH_LIMITS}"
 
 
-# --- FUNZIONI DI CALCOLO E PARSING ---
+# --- FUNZIONI (INVARIATE) ---
 
 @st.cache_data(ttl=300)
 def get_weather_data(icao):
     """Recupera METAR e TAF."""
     metar, taf = "METAR non disponibile", "TAF non disponibile"
-    headers = {"User-Agent": "TotalStep-Streamlit-App/1.6"}
+    headers = {"User-Agent": "TotalStep-Streamlit-App/1.7"}
     try:
         r_metar = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&hoursBeforeNow=2", headers=headers)
         if r_metar.ok and r_metar.text: metar = r_metar.text.strip()
@@ -36,37 +38,23 @@ def get_weather_data(icao):
     except requests.exceptions.RequestException: pass
     return metar, taf
 
-# --- VERSIONE ROBUSTA DELLA FUNZIONE DI CARICAMENTO LIMITI ---
 @st.cache_data
 def load_aircraft_limits(url):
-    """Carica i limiti dal file CSV, gestendo colonne mancanti con valori di default."""
-    default_limits = {
-        'max_wind': 99.0,
-        'max_headwind': 99.0,
-        'max_tailwind': 5.0,
-        'max_crosswind_dry': 99.0,
-        'max_crosswind_wet': 99.0
-    }
-    
+    """Carica i limiti dal file CSV, gestendo colonne mancanti."""
+    # (Usiamo la versione robusta che è comunque una buona pratica)
+    default_limits = {'max_headwind': 99.0, 'max_tailwind': 5.0, 'max_crosswind_dry': 99.0, 'max_crosswind_wet': 99.0}
     loaded_df = pd.read_csv(url)
-    # Pulisce gli spazi extra dai nomi delle colonne, se presenti
     loaded_df.columns = loaded_df.columns.str.strip()
     loaded_limits = loaded_df.iloc[0].to_dict()
-    
     final_limits = default_limits.copy()
-    missing_cols = []
-
-    for key in default_limits:
-        if key in loaded_limits:
-            final_limits[key] = loaded_limits[key]
-        else:
-            missing_cols.append(key)
-            
+    missing_cols = [key for key in default_limits if key not in loaded_limits]
     if missing_cols:
-        st.warning(f"Attenzione: Le colonne `{', '.join(missing_cols)}` mancano in `aircraft_limits.csv` e sono stati usati valori di default.")
-
+        st.warning(f"Colonne mancanti in `aircraft_limits.csv`: `{', '.join(missing_cols)}`. Usati valori di default.")
+    for key in default_limits:
+        if key in loaded_limits: final_limits[key] = loaded_limits[key]
     return final_limits
 
+# ... (le altre funzioni di parsing e calcolo rimangono identiche) ...
 def parse_wind_from_metar(metar):
     if not isinstance(metar, str): return None, None
     match = re.search(r"(\d{3})(\d{2,3})(G\d{2,3})?KT", metar)
@@ -93,7 +81,6 @@ def parse_runway_data(data_string):
 
 def get_colored_wind_display(headwind, crosswind, limits):
     abs_crosswind = abs(crosswind)
-    
     if headwind >= 0:
         color = "red" if headwind > limits['max_headwind'] else "green"
         hw_text = f"<span style='color:{color};'>Head Wind: {headwind:.1f} kts</span>"
@@ -101,33 +88,36 @@ def get_colored_wind_display(headwind, crosswind, limits):
         tailwind = abs(headwind)
         color = "red" if tailwind > limits['max_tailwind'] else "green"
         hw_text = f"<span style='color:{color};'>Tail Wind: {tailwind:.1f} kts</span>"
-        
     if abs_crosswind > limits['max_crosswind_dry']:
         color = "red"
     elif abs_crosswind > limits['max_crosswind_wet']:
         color = "orange"
     else:
         color = "green"
-    
     cw_dir = "right" if crosswind >= 0 else "left"
     cw_text = f"<span style='color:{color};'>Cross Wind: {abs_crosswind:.1f} kt ({cw_dir})</span>"
-    
     return f"{hw_text} | {cw_text}"
-
 
 # --- INTERFACCIA STREAMLIT ---
 st.set_page_config(layout="wide")
 st.title("Total Step")
 
+# --- MODIFICA: AUTO REFRESH CON HARD RELOAD ---
+# st_autorefresh restituisce un contatore. Lo usiamo per triggerare l'aggiornamento.
+refresh_count = st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
+if refresh_count > 0:
+    st.cache_data.clear() # Pulisce la cache dei dati
+    streamlit_js_eval(js_expressions="parent.window.location.reload()")
+
+# --- MODIFICA: PULSANTE MANUALE CON HARD RELOAD ---
+if st.button("🔄 Manual Refresh"):
+    st.cache_data.clear() # Pulisce la cache dei dati
+    streamlit_js_eval(js_expressions="parent.window.location.reload()")
+
 now = datetime.now(pytz.timezone('Europe/Rome'))
 st.info(f"**Last update (local time): {now.strftime('%H:%M:%S on %d/%m/%Y')}**")
 
-st_autorefresh(interval=5 * 60 * 1000, key="data_refresh")
-
-if st.button("🔄 Manual Refresh"):
-    st.cache_data.clear()
-    st.rerun()
-
+# ... (il resto dello script per visualizzare i dati rimane invariato) ...
 try:
     aircraft_limits = load_aircraft_limits(url_limits)
     airports_df = pd.read_csv(url_airports, skipinitialspace=True)
@@ -137,14 +127,16 @@ try:
         st.error(f"Il file CSV degli aeroporti deve contenere le colonne 'ICAO' e '{colonna_piste}'.")
     else:
         for index, row in airports_df.iterrows():
-            # ... il resto dello script rimane identico ...
             icao, name = row["ICAO"].strip(), row["Name"].strip()
             st.subheader(f"{icao} - {name}")
+
             metar, taf = get_weather_data(icao)
             wind_dir, wind_speed = parse_wind_from_metar(metar)
+
             col1, col2 = st.columns(2)
             col1.text_area("METAR", metar, height=50, key=f"metar_{icao}_{index}")
             col2.text_area("TAF", taf, height=150, key=f"taf_{icao}_{index}")
+            
             st.markdown("##### Wind Components per Runway")
             if pd.isna(row[colonna_piste]):
                 st.warning("Runway data not available.")
@@ -161,5 +153,7 @@ try:
                         display_text = get_colored_wind_display(headwind, crosswind, aircraft_limits)
                         st.markdown(f"**{runway_name}**: {display_text}", unsafe_allow_html=True)
             st.markdown("---")
+
 except Exception as e:
     st.error(f"Impossibile caricare o processare i file da GitHub: {e}")
+
