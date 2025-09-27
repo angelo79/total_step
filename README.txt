@@ -8,3 +8,11 @@ GREEN:	<
 TODO:
 nefoanalisi
 lightning
+grafico trend pressione, visibilità, ceiling ultime 6 ore (modificabile dall'utente?)
+parsing notam (RWY, TCN, ILS, B/BAK)
+
+- procedure con minime per metar e taf:
+GREEN: ok (per carta strumentale max)
+ORANGE: vis o ceal >= 30%
+RED: < valori
+
