@@ -60,7 +60,7 @@ def get_weather_data(icao):
 # --- INTERFACCIA STREAMLIT ---
 
 st.set_page_config(layout="wide")
-st.title("METAR e TAF Viewer da GitHub")
+st.title("METAR e TAF Viewer")
 
 # Trigger per l'aggiornamento automatico ogni 5 minuti
 st_autorefresh(interval=5 * 60 * 1000, key="data_refresh")
