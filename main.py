@@ -2,16 +2,16 @@ import streamlit as st
 import pandas as pd
 import requests
 from streamlit_autorefresh import st_autorefresh
+from datetime import datetime
+import pytz
 
 # --- CONFIGURAZIONE GITHUB ---
 # ATTENZIONE: Modifica queste 4 variabili con i dettagli del tuo repository.
-# Lo script presume che il repository sia pubblico.
 GITHUB_USER = "angelo79"
 REPO_NAME = "total_step"
 BRANCH = "main"  # o "master" o il nome del tuo branch principale
 FILE_PATH = "airport_list.csv" # Percorso del file nel repository, es. "data/airport_list.csv"
 
-# Costruisce l'URL per accedere al file raw su GitHub
 raw_github_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/{BRANCH}/{FILE_PATH}"
 
 
@@ -22,23 +22,20 @@ def get_weather_data(icao):
     """Recupera METAR e TAF usando i nuovi endpoint API di AviationWeather.gov."""
     metar = "METAR non disponibile"
     taf = "TAF non disponibile"
-    # È buona pratica includere un User-Agent per identificare la tua app
-    headers = {"User-Agent": "Streamlit-METAR-App/1.0 (https://github.com/TuoNomeUtenteGitHub/NomeDelTuoRepo)"}
+    headers = {"User-Agent": "Streamlit-METAR-App/1.0"}
 
-    # --- Endpoint aggiornato per METAR ---
+    # --- Endpoint per METAR ---
     try:
         metar_url = "https://aviationweather.gov/api/data/metar"
         params_metar = {"ids": icao, "format": "raw", "hoursBeforeNow": 2}
         response_metar = requests.get(metar_url, params=params_metar, headers=headers)
-        response_metar.raise_for_status() # Solleva un'eccezione per errori HTTP (es. 4xx, 5xx)
+        response_metar.raise_for_status()
         if response_metar.text:
             metar = response_metar.text.strip()
     except requests.exceptions.RequestException:
-        # Se il METAR non viene trovato (es. 404), la funzione non bloccherà l'app,
-        # ma mostrerà il messaggio di default "METAR non disponibile".
         pass
 
-    # --- Endpoint aggiornato per TAF ---
+    # --- Endpoint per TAF ---
     try:
         taf_url = "https://aviationweather.gov/api/data/taf"
         params_taf = {"ids": icao, "format": "raw", "hoursBeforeNow": 3}
@@ -47,11 +44,9 @@ def get_weather_data(icao):
         if response_taf.text:
             taf = response_taf.text.strip()
     except requests.exceptions.RequestException as e:
-        # Molti aeroporti (specialmente militari) non emettono TAF. Un errore 404 è normale.
         if e.response and e.response.status_code == 404:
             taf = "TAF non emesso per questa stazione."
         else:
-            # Per altri errori (es. di connessione), lascialo come "non disponibile".
             pass
 
     return metar, taf
@@ -60,27 +55,30 @@ def get_weather_data(icao):
 # --- INTERFACCIA STREAMLIT ---
 
 st.set_page_config(layout="wide")
-st.title("METAR e TAF Viewer")
+st.title("METAR e TAF Viewer da GitHub")
+
+# --- NUOVA SEZIONE: ORARIO AGGIORNAMENTO ---
+# Mostra l'orario attuale ogni volta che lo script viene eseguito
+now = datetime.now(pytz.timezone('Europe/Rome'))
+st.info(f"**Ultimo aggiornamento (ora locale): {now.strftime('%H:%M:%S del %d/%m/%Y')}**")
 
 # Trigger per l'aggiornamento automatico ogni 5 minuti
 st_autorefresh(interval=5 * 60 * 1000, key="data_refresh")
 
 # Pulsante per forzare l'aggiornamento manuale
-if st.button("Aggiorna Dati Manualmente"):
+if st.button("🔄 Aggiorna Dati Manualmente"):
+    # Svuota la cache di tutte le funzioni per forzare il ricaricamento
     st.cache_data.clear()
+    # Riesegue l'intero script dall'inizio
     st.rerun()
 
 # Caricamento del file CSV da GitHub
 try:
-    st.info(f"Caricamento di `{FILE_PATH}` dal repository GitHub...")
     airports_df = pd.read_csv(raw_github_url, skipinitialspace=True)
 
     if "ICAO" not in airports_df.columns or "Name" not in airports_df.columns:
-        st.error(f"Il file CSV in `{raw_github_url}` deve contenere le colonne 'ICAO' e 'Name'.")
-        st.write(f"Colonne rilevate: {airports_df.columns.tolist()}")
+        st.error(f"Il file CSV deve contenere le colonne 'ICAO' e 'Name'.")
     else:
-        st.success(f"Trovati {len(airports_df)} aeroporti. Caricamento dati meteo...")
-
         for index, row in airports_df.iterrows():
             icao = row["ICAO"].strip()
             name = row["Name"].strip()
@@ -98,6 +96,6 @@ try:
 
 except Exception as e:
     st.error(f"Impossibile caricare il file da GitHub: {e}")
-    st.warning(f"Controlla che le variabili GITHUB_USER, REPO_NAME, BRANCH, e FILE_PATH siano corrette e che il repository sia pubblico.")
+    st.warning(f"Controlla che le variabili del tuo repository siano corrette e che il repository sia pubblico.")
     st.code(f"URL tentato: {raw_github_url}")
 
