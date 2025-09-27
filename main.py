@@ -25,7 +25,7 @@ url_limits = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/{BRAN
 def get_weather_data(icao):
     """Recupera METAR e TAF."""
     metar, taf = "METAR non disponibile", "TAF non disponibile"
-    headers = {"User-Agent": "TotalStep-Streamlit-App/2.1"}
+    headers = {"User-Agent": "TotalStep-Streamlit-App/2.2"}
     try:
         r_metar = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&hoursBeforeNow=2", headers=headers)
         if r_metar.ok and r_metar.text: metar = r_metar.text.strip()
@@ -72,9 +72,11 @@ def get_max_wind_components(winds, rwy_true_heading):
     return max_headwind, max_tailwind, max_crosswind
 
 def format_runway_name(magnetic_heading):
+    """Converte l'orientamento magnetico nel formato RWYXX."""
     return f"RWY{round(magnetic_heading / 10):02d}"
 
 def parse_runway_data(data_string):
+    """Estrae gli orientamenti veri e magnetici da una stringa."""
     true_hdgs, magn_hdgs = [], []
     if isinstance(data_string, str):
         for pair in data_string.split(';'):
@@ -84,20 +86,22 @@ def parse_runway_data(data_string):
                 magn_hdgs.append(int(match.group(2)))
     return true_hdgs, magn_hdgs
 
-# --- FUNZIONE AGGIORNATA CON >= ---
+# --- FUNZIONE AGGIORNATA PER OMETTERE VALORI A ZERO ---
 def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, limits):
-    """Genera la stringa Markdown con i colori per i valori massimi usando >=."""
+    """Genera la stringa Markdown, omettendo componenti a zero."""
     parts = []
 
-    # Headwind
-    color_hw = "red" if max_headwind >= limits['max_headwind'] else "green"
-    parts.append(f"<span style='color:{color_hw};'>Max Headwind: {max_headwind:.1f} kts</span>")
+    # Aggiunge Max Headwind solo se non è zero
+    if max_headwind > 0.0:
+        color_hw = "red" if max_headwind >= limits['max_headwind'] else "green"
+        parts.append(f"<span style='color:{color_hw};'>Max Headwind: {max_headwind:.1f} kts</span>")
 
-    # Tailwind
-    color_tw = "red" if max_tailwind >= limits['max_tailwind'] else "green"
-    parts.append(f"<span style='color:{color_tw};'>Max Tailwind: {max_tailwind:.1f} kts</span>")
+    # Aggiunge Max Tailwind solo se non è zero
+    if max_tailwind > 0.0:
+        color_tw = "red" if max_tailwind >= limits['max_tailwind'] else "green"
+        parts.append(f"<span style='color:{color_tw};'>Max Tailwind: {max_tailwind:.1f} kts</span>")
         
-    # Crosswind
+    # Aggiunge sempre Max Crosswind
     if max_crosswind >= limits['max_crosswind_dry']:
         color_cw = "red"
     elif max_crosswind >= limits['max_crosswind_wet']:
