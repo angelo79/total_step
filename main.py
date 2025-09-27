@@ -23,7 +23,7 @@ def get_weather_data(icao):
     """Recupera METAR e TAF."""
     metar = "METAR non disponibile"
     taf = "TAF non disponibile"
-    headers = {"User-Agent": "TotalStep-Streamlit-App/1.1"}
+    headers = {"User-Agent": "TotalStep-Streamlit-App/1.2"}
     
     try:
         metar_url = "https://aviationweather.gov/api/data/metar"
@@ -48,13 +48,11 @@ def get_weather_data(icao):
 def parse_wind_from_metar(metar):
     """Estrae direzione e velocità del vento da una stringa METAR."""
     if not isinstance(metar, str): return None, None
-    # Cerca il pattern DDDSS(Ggg)KT dove DDD è la direzione e SS la velocità
     match = re.search(r"(\d{3})(\d{2,3})(G\d{2,3})?KT", metar)
     if match:
         wind_dir = int(match.group(1))
         wind_speed = int(match.group(2))
-        # Ignora le raffiche (G) per il calcolo base, ma si potrebbe estendere
-        if wind_dir == 0 and wind_speed == 0: return None, None # Vento calmo
+        if wind_dir == 0 and wind_speed == 0: return None, None
         return wind_dir, wind_speed
     return None, None
 
@@ -65,6 +63,12 @@ def calculate_wind_components(wind_dir, wind_speed, rwy_heading):
     crosswind = wind_speed * sin(angle_diff)
     return headwind, crosswind
 
+# --- NUOVA FUNZIONE PER FORMATTARE IL NOME PISTA ---
+def format_runway_name(heading):
+    """Converte i gradi della pista nel formato RWYXX (es. 262 -> RWY26)."""
+    runway_number = round(heading / 10)
+    return f"RWY{runway_number:02d}"
+
 
 # --- INTERFACCIA STREAMLIT ---
 
@@ -72,11 +76,11 @@ st.set_page_config(layout="wide")
 st.title("Total Step")
 
 now = datetime.now(pytz.timezone('Europe/Rome'))
-st.info(f"**Ultimo aggiornamento (ora locale): {now.strftime('%H:%M:%S del %d/%m/%Y')}**")
+st.info(f"**Last update (local time): {now.strftime('%H:%M:%S on %d/%m/%Y')}**")
 
 st_autorefresh(interval=5 * 60 * 1000, key="data_refresh")
 
-if st.button("🔄 Aggiorna Dati Manualmente"):
+if st.button("🔄 Manual Refresh"):
     st.cache_data.clear()
     st.rerun()
 
@@ -84,7 +88,7 @@ try:
     airports_df = pd.read_csv(raw_github_url, skipinitialspace=True)
 
     if "ICAO" not in airports_df.columns or "Name" not in airports_df.columns:
-        st.error("Il file CSV deve contenere almeno le colonne 'ICAO' e 'Name'.")
+        st.error("CSV file must contain 'ICAO' and 'Name' columns.")
     else:
         for index, row in airports_df.iterrows():
             icao = row["ICAO"].strip()
@@ -99,37 +103,39 @@ try:
             col1.text_area("METAR", metar, height=50, key=f"metar_{icao}_{index}")
             col2.text_area("TAF", taf, height=150, key=f"taf_{icao}_{index}")
 
-            # --- NUOVA SEZIONE: CALCOLO E VISUALIZZAZIONE VENTO ---
-            st.markdown("##### Componenti Vento per Pista")
+            st.markdown("##### Wind Components per Runway")
 
             if "RWY_true_north" not in row or pd.isna(row["RWY_true_north"]):
-                st.warning("Dati piste non disponibili in CSV per questo aeroporto.")
+                st.warning("Runway data not available in CSV for this airport.")
             elif wind_dir is None:
-                st.info("Vento non riportato nel METAR o vento calmo.")
+                st.info("Wind not reported in METAR or calm wind.")
             else:
                 try:
                     runways = str(row["RWY_true_north"]).split(';')
                     runway_headings = [int(r.strip()) for r in runways]
 
                     wind_info_list = []
-                    for rwy in runway_headings:
-                        headwind, crosswind = calculate_wind_components(wind_dir, wind_speed, rwy)
+                    for rwy_hdg in runway_headings:
+                        headwind, crosswind = calculate_wind_components(wind_dir, wind_speed, rwy_hdg)
                         
-                        hw_label = "Vento frontale" if headwind >= 0 else "Vento in coda"
-                        cw_label = "da destra" if crosswind >= 0 else "da sinistra"
+                        # --- TESTO AGGIORNATO COME RICHIESTO ---
+                        hw_label = f"Head Wind: {abs(headwind):.1f} kts" if headwind >= 0 else f"Tail Wind: {abs(headwind):.1f} kts"
+                        cw_dir_label = "right" if crosswind >= 0 else "left"
+                        cw_label = f"Cross Wind: {abs(crosswind):.1f} kt ({cw_dir_label})"
                         
-                        wind_info_list.append(
-                            f"**Pista {rwy}°**: {hw_label}: **{abs(headwind):.1f} kt** | Vento traverso: **{abs(crosswind):.1f} kt** ({cw_label})"
-                        )
+                        # Usa la nuova funzione per formattare il nome della pista
+                        runway_name = format_runway_name(rwy_hdg)
+                        
+                        wind_info_list.append(f"**{runway_name}**: {hw_label} | {cw_label}")
                     
                     st.markdown("  \n".join(wind_info_list))
 
                 except (ValueError, TypeError):
-                    st.error(f"Formato dati per RWY_true_north non valido: '{row['RWY_true_north']}'. Deve essere numerico e separato da ';'.")
+                    st.error(f"Invalid format for RWY_true_north: '{row['RWY_true_north']}'. Must be numeric and semicolon-separated.")
             
             st.markdown("---")
 
 except Exception as e:
-    st.error(f"Impossibile caricare o processare il file da GitHub: {e}")
-    st.code(f"URL tentato: {raw_github_url}")
+    st.error(f"Could not load or process the file from GitHub: {e}")
+    st.code(f"Attempted URL: {raw_github_url}")
 
