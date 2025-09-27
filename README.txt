@@ -6,6 +6,7 @@ GREEN:	<
 
 
 TODO:
+winds components anche per TAF
 nefoanalisi
 lightning
 grafico trend pressione, visibilità, ceiling ultime 6 ore (modificabile dall'utente?)
