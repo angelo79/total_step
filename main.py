@@ -23,7 +23,7 @@ def get_weather_data(icao):
     """Recupera METAR e TAF."""
     metar = "METAR non disponibile"
     taf = "TAF non disponibile"
-    headers = {"User-Agent": "TotalStep-Streamlit-App/1.2"}
+    headers = {"User-Agent": "TotalStep-Streamlit-App/1.3"}
     
     try:
         metar_url = "https://aviationweather.gov/api/data/metar"
@@ -56,18 +56,37 @@ def parse_wind_from_metar(metar):
         return wind_dir, wind_speed
     return None, None
 
-def calculate_wind_components(wind_dir, wind_speed, rwy_heading):
-    """Calcola le componenti headwind e crosswind."""
-    angle_diff = radians(wind_dir - rwy_heading)
+def calculate_wind_components(wind_dir, wind_speed, rwy_true_heading):
+    """Calcola le componenti headwind e crosswind usando l'orientamento vero."""
+    angle_diff = radians(wind_dir - rwy_true_heading)
     headwind = wind_speed * cos(angle_diff)
     crosswind = wind_speed * sin(angle_diff)
     return headwind, crosswind
 
-# --- NUOVA FUNZIONE PER FORMATTARE IL NOME PISTA ---
-def format_runway_name(heading):
-    """Converte i gradi della pista nel formato RWYXX (es. 262 -> RWY26)."""
-    runway_number = round(heading / 10)
+def format_runway_name(magnetic_heading):
+    """Converte l'orientamento magnetico nel formato RWYXX."""
+    runway_number = round(magnetic_heading / 10)
     return f"RWY{runway_number:02d}"
+
+# --- NUOVA FUNZIONE DI PARSING PER LA COLONNA DELLE PISTE ---
+def parse_runway_data(data_string):
+    """
+    Estrae gli orientamenti veri e magnetici da una stringa.
+    Formato atteso: "true1(magn1);true2(magn2)"
+    """
+    true_headings = []
+    magnetic_headings = []
+    
+    if not isinstance(data_string, str):
+        return [], []
+        
+    pairs = data_string.split(';')
+    for pair in pairs:
+        match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)\s*$", pair.strip())
+        if match:
+            true_headings.append(int(match.group(1)))
+            magnetic_headings.append(int(match.group(2)))
+    return true_headings, magnetic_headings
 
 
 # --- INTERFACCIA STREAMLIT ---
@@ -85,6 +104,8 @@ if st.button("🔄 Manual Refresh"):
     st.rerun()
 
 try:
+    # --- MODIFICA NOME COLONNA ---
+    colonna_piste = "RWY_true_north(magn_north)"
     airports_df = pd.read_csv(raw_github_url, skipinitialspace=True)
 
     if "ICAO" not in airports_df.columns or "Name" not in airports_df.columns:
@@ -105,33 +126,31 @@ try:
 
             st.markdown("##### Wind Components per Runway")
 
-            if "RWY_true_north" not in row or pd.isna(row["RWY_true_north"]):
+            if colonna_piste not in row or pd.isna(row[colonna_piste]):
                 st.warning("Runway data not available in CSV for this airport.")
             elif wind_dir is None:
                 st.info("Wind not reported in METAR or calm wind.")
             else:
-                try:
-                    runways = str(row["RWY_true_north"]).split(';')
-                    runway_headings = [int(r.strip()) for r in runways]
-
+                # --- USA LA NUOVA FUNZIONE DI PARSING ---
+                true_headings, magnetic_headings = parse_runway_data(row[colonna_piste])
+                
+                if not true_headings:
+                    st.error(f"Invalid format for runway data: '{row[colonna_piste]}'. Expected 'true(magn);...'.")
+                else:
                     wind_info_list = []
-                    for rwy_hdg in runway_headings:
-                        headwind, crosswind = calculate_wind_components(wind_dir, wind_speed, rwy_hdg)
+                    # Itera su entrambe le liste contemporaneamente
+                    for true_hdg, magn_hdg in zip(true_headings, magnetic_headings):
+                        headwind, crosswind = calculate_wind_components(wind_dir, wind_speed, true_hdg)
                         
-                        # --- TESTO AGGIORNATO COME RICHIESTO ---
                         hw_label = f"Head Wind: {abs(headwind):.1f} kts" if headwind >= 0 else f"Tail Wind: {abs(headwind):.1f} kts"
                         cw_dir_label = "right" if crosswind >= 0 else "left"
                         cw_label = f"Cross Wind: {abs(crosswind):.1f} kt ({cw_dir_label})"
                         
-                        # Usa la nuova funzione per formattare il nome della pista
-                        runway_name = format_runway_name(rwy_hdg)
+                        runway_name = format_runway_name(magn_hdg)
                         
                         wind_info_list.append(f"**{runway_name}**: {hw_label} | {cw_label}")
                     
                     st.markdown("  \n".join(wind_info_list))
-
-                except (ValueError, TypeError):
-                    st.error(f"Invalid format for RWY_true_north: '{row['RWY_true_north']}'. Must be numeric and semicolon-separated.")
             
             st.markdown("---")
 
