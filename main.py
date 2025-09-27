@@ -25,7 +25,7 @@ url_limits = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/{BRAN
 def get_weather_data(icao):
     """Recupera METAR e TAF."""
     metar, taf = "METAR non disponibile", "TAF non disponibile"
-    headers = {"User-Agent": "TotalStep-Streamlit-App/2.3"}
+    headers = {"User-Agent": "TotalStep-Streamlit-App/2.4"}
     try:
         r_metar = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&hoursBeforeNow=2", headers=headers)
         if r_metar.ok and r_metar.text: metar = r_metar.text.strip()
@@ -37,11 +37,9 @@ def get_weather_data(icao):
     except requests.exceptions.RequestException: pass
     return metar, taf
 
-# --- FUNZIONE CORRETTA: FORZA LA CONVERSIONE IN FLOAT ---
-@st.cache_data
+# --- MODIFICA: RIMOSSA @st.cache_data DA QUESTA FUNZIONE ---
 def load_aircraft_limits(url):
     """Carica i limiti dal file CSV, assicurando che siano numeri (float)."""
-    # dtype=float forza pandas a leggere tutti i dati come numeri.
     loaded_df = pd.read_csv(url, dtype=float) 
     loaded_df.columns = loaded_df.columns.str.strip()
     return loaded_df.iloc[0].to_dict()
