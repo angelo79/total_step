@@ -1,10 +1,10 @@
-ICAO,Name
-LIPS,Istrana
-LIPA,Aviano
-LIPI,Rivolto
-LIPC,Cervia
-LIPL,Ghedi
-LIRP,Pisa
-LIRS,Grosseto
-LIRE,Pratica di Mare
-LICT,Trapani
+ICAO,Name,RWY_true_north
+LIPS,Istrana,82;262
+LIPA,Aviano,48;228
+LIPI,Rivolto,59;239
+LIPC,Cervia,116;296
+LIPL,Ghedi,135;315
+LIRP,Pisa,36;216
+LIRS,Grosseto,31;211
+LIRE,Pratica di Mare,130;310
+LICT,Trapani,128;308
