@@ -9,7 +9,7 @@ import pytz
 from streamlit_js_eval import streamlit_js_eval
 
 # --- CONFIGURAZIONE ---
-IPGEOLOCATION_API_KEY = "TUA_CHIAVE_API" # Inserisci la tua chiave API
+IPGEOLOCATION_API_KEY = "3a6e8044a5294776a880a165fd279516" # Inserisci la tua chiave API
 
 # Coordinate per Istrana (TV), Italia
 ISTRANA_LAT = 45.68
