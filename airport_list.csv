@@ -1,5 +1,5 @@
-ICAO,Name,RWY_true_north(magn_north)
-LIPS,Istrana,82(78);262(258)
+ICAO,Name,RWY_true_north(magn_north),coord
+LIPS,Istrana,82(78);262(258),45.684487;12.087512
 LIPA,Aviano,48(45);228(225)
 LIPI,Rivolto,59(57);239(237)
 LIPC,Cervia,116(112);296(292)

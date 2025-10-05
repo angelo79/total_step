@@ -11,10 +11,6 @@ from streamlit_js_eval import streamlit_js_eval
 # --- CONFIGURAZIONE ---
 IPGEOLOCATION_API_KEY = "3a6e8044a5294776a880a165fd279516" # Inserisci la tua chiave API
 
-# Coordinate per Istrana (TV), Italia
-ISTRANA_LAT = 45.68
-ISTRANA_LON = 12.08
-
 GITHUB_USER = "angelo79"
 REPO_NAME = "total_step"
 BRANCH = "main"
@@ -27,10 +23,25 @@ url_limits = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/{BRAN
 
 # --- FUNZIONI DI CALCOLO E PARSING ---
 
-# --- FUNZIONE CORRETTA E RESILIENTE PER DATI ASTRONOMICI ---
-@st.cache_data(ttl=1800)  # Cache per 30 minuti
+def parse_coord(coord_str):
+    if pd.isna(coord_str) or coord_str.strip() == '':
+        return None, None
+    try:
+        lat_str, lon_str = coord_str.split(';')
+        return float(lat_str), float(lon_str)
+    except (ValueError, IndexError):
+        return None, None
+
+# --- FUNZIONE OTTIMIZZATA CON CACHE GIORNALIERA ---
 def get_astronomy_data(lat, lon, api_key):
-    """Recupera dati astronomici completi da IPGeolocation."""
+    """Recupera dati astronomici usando una cache giornaliera in session_state."""
+    today = datetime.now(pytz.timezone('Europe/Rome')).date()
+    
+    # Controlla se i dati sono già in cache e sono validi per oggi
+    if 'astro_data' in st.session_state and st.session_state.get('astro_date') == today:
+        return st.session_state.astro_data
+
+    # Altrimenti, esegui la chiamata API
     params = {"apiKey": api_key, "lat": lat, "long": lon}
     try:
         response = requests.get("https://api.ipgeolocation.io/astronomy", params=params)
@@ -38,38 +49,40 @@ def get_astronomy_data(lat, lon, api_key):
         data = response.json()
         
         local_tz = pytz.timezone('Europe/Rome')
-        date_today = datetime.strptime(data['date'], '%Y-%m-%d').date()
+        date_today_from_api = datetime.strptime(data['date'], '%Y-%m-%d').date()
 
         def to_utc(time_str):
             if not time_str or time_str == "-:-": return "N/A"
             h, m = map(int, time_str.split(':'))
-            local_dt = local_tz.localize(datetime.combine(date_today, datetime.min.time())).replace(hour=h, minute=m)
+            local_dt = local_tz.localize(datetime.combine(date_today_from_api, datetime.min.time())).replace(hour=h, minute=m)
             return local_dt.astimezone(pytz.utc).strftime('%H:%MZ')
 
-        # Stima della luminosità della luna in millilux
         illumination_percent = float(data.get('moon_illumination_percentage', '0').replace('%',''))
         max_moon_lux = 0.25 
         estimated_millilux = (illumination_percent / 100.0) * max_moon_lux * 1000
 
-        # Estrae i dati in modo sicuro
-        astro_data = {
-            "morning_twilight": to_utc(data.get("civil_twilight_begin")),
-            "evening_twilight": to_utc(data.get("civil_twilight_end")),
+        processed_data = {
+            "sunrise": to_utc(data.get("sunrise")),
+            "sunset": to_utc(data.get("sunset")),
             "moonrise": to_utc(data.get("moonrise")),
             "moonset": to_utc(data.get("moonset")),
             "moon_phase": data.get("moon_phase", "N/A").replace("_", " ").title(),
             "moon_luminosity": round(estimated_millilux)
         }
-        return astro_data
+        
+        # Salva i nuovi dati e la data nella cache di sessione
+        st.session_state.astro_data = processed_data
+        st.session_state.astro_date = today
+        
+        return processed_data
     except Exception as e:
         st.warning(f"Non è stato possibile recuperare i dati astronomici: {e}")
         return None
 
-# ... (tutte le altre funzioni rimangono invariate) ...
 @st.cache_data(ttl=300)
 def get_weather_data(icao):
     metar, taf = "METAR non disponibile", "TAF non disponibile"
-    headers = {"User-Agent": "TotalStep-Streamlit-App/2.9"}
+    headers = {"User-Agent": "TotalStep-Streamlit-App/3.2"}
     try:
         r_metar = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&hoursBeforeNow=2", headers=headers)
         if r_metar.ok and r_metar.text: metar = r_metar.text.strip()
@@ -151,7 +164,8 @@ st.title("Total Step")
 
 refresh_count = st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
 if refresh_count > 0:
-    st.cache_data.clear()
+    # Pulisce solo le cache legate al meteo, non quella astronomica
+    st.cache_data.clear() 
     streamlit_js_eval(js_expressions="parent.window.location.reload()")
 if st.button("🔄 Manual Refresh"):
     st.cache_data.clear()
@@ -164,26 +178,30 @@ try:
     airports_df = pd.read_csv(url_airports, skipinitialspace=True)
     
     colonna_piste = "RWY_true_north(magn_north)"
+    
+    first_airport_with_coords_row = airports_df[airports_df['coord'].notna()].iloc[0] if 'coord' in airports_df.columns and not airports_df[airports_df['coord'].notna()].empty else None
+    
+    if first_airport_with_coords_row is not None:
+        lat, lon = parse_coord(first_airport_with_coords_row['coord'])
+        first_airport_icao = first_airport_with_coords_row['ICAO'].strip()
+    else:
+        lat, lon, first_airport_icao = None, None, None
+
     for index, row in airports_df.iterrows():
         icao, name = row["ICAO"].strip(), row["Name"].strip()
 
         st.subheader(f"{icao} - {name}")
         
-        if icao == "LIPS":
-            astro_data = get_astronomy_data(ISTRANA_LAT, ISTRANA_LON, IPGEOLOCATION_API_KEY)
+        if icao == first_airport_icao and lat is not None:
+            astro_data = get_astronomy_data(lat, lon, IPGEOLOCATION_API_KEY)
             if astro_data:
-                # Costruisce la stringa HTML in modo dinamico
-                html_parts = []
-                if astro_data.get("morning_twilight") != "N/A":
-                    html_parts.append(f"**Morning Civil Twilight:** {astro_data['morning_twilight']}")
-                if astro_data.get("evening_twilight") != "N/A":
-                    html_parts.append(f"**Evening Civil Twilight:** {astro_data['evening_twilight']}")
-                
-                # Aggiunge i dati lunari
-                html_parts.append(f"**Moonrise:** {astro_data['moonrise']} | **Moonset:** {astro_data['moonset']}")
-                html_parts.append(f"**Moon Phase:** {astro_data['moon_phase']} | **Max Illumination:** {astro_data['moon_luminosity']} millilux")
-
-                st.markdown(f"<div style='font-size: 0.9em;'>{'<br>'.join(html_parts)}</div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div style='font-size: 0.9em;'>"
+                    f"**Sunrise:** {astro_data['sunrise']} | **Sunset:** {astro_data['sunset']}<br>"
+                    f"**Moonrise:** {astro_data['moonrise']} | **Moonset:** {astro_data['moonset']}<br>"
+                    f"**Moon Phase:** {astro_data['moon_phase']} | **Max Illumination:** {astro_data['moon_luminosity']} millilux"
+                    "</div>", unsafe_allow_html=True
+                )
         
         metar, taf = get_weather_data(icao)
         col1, col2 = st.columns(2)
