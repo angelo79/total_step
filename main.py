@@ -59,7 +59,7 @@ def parse_runway_data(data_string):
     if isinstance(data_string, str):
         pairs = data_string.strip().split(';')
         for pair in pairs:
-            match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)$", pair.strip())
+            match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)\s*$", pair.strip())
             if match:
                 true_hdgs.append(int(match.group(1)))
                 magn_hdgs.append(int(match.group(2)))
@@ -104,7 +104,7 @@ def get_astronomy_data(lat, lon, api_key):
 @st.cache_data()
 def get_weather_data(icao, refresh_key):
     metar, taf = "METAR non disponibile", "TAF non disponibile"
-    headers = {"User-Agent": "TotalStep-Streamlit-App/4.2"}
+    headers = {"User-Agent": "TotalStep-Streamlit-App/4.4"}
     try:
         r_metar = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&hoursBeforeNow=2", headers=headers)
         if r_metar.ok and r_metar.text: metar = r_metar.text.strip()
@@ -157,7 +157,7 @@ st.set_page_config(layout="wide")
 st.markdown("<h1 style='text-align: center;'>TOTAL STEP</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; font-size: 0.9em;'>by: angelo.corallo@am.difesa.it</p>", unsafe_allow_html=True)
 
-st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
+refresh_count = st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
 
 now = datetime.now(pytz.timezone('Europe/Rome'))
 st.info(f"Last update (local time): {now.strftime('%H:%M:%S on %d/%m/%Y')}")
@@ -173,8 +173,6 @@ try:
         first_airport_icao = first_airport_row['ICAO'].strip()
     else: lat, lon, first_airport_icao = None, None, None
 
-    refresh_key = int(now.timestamp() // 300)
-
     for index, row in airports_df.iterrows():
         icao, name = row["ICAO"].strip(), row["Name"].strip()
         st.subheader(f"{icao} - {name}")
@@ -185,7 +183,7 @@ try:
                 st.markdown(f"<div style='font-size: 0.9em;'>Sunrise: {astro_data['sunrise']} | Sunset: {astro_data['sunset']}<br>Moonrise: {astro_data['moonrise']} | Moonset: {astro_data['moonset']}<br>Moon Phase: {astro_data['moon_phase']} | Max Illumination: {astro_data['moon_luminosity']} millilux</div>", unsafe_allow_html=True)
                 st.markdown("<br>", unsafe_allow_html=True)
 
-        metar, taf = get_weather_data(icao, refresh_key)
+        metar, taf = get_weather_data(icao, refresh_count)
         procedures = parse_procedures(row.get('(proc;ceil;vis)'))
 
         col1, col2 = st.columns(2)
@@ -196,8 +194,8 @@ try:
                 metar_vis, metar_ceil = parse_weather_conditions(metar)
                 st.markdown("Procedures (GREEN: at or above minima | RED: below minima):", unsafe_allow_html=True)
                 st.markdown(format_grouped_procedures(procedures, metar_vis, metar_ceil), unsafe_allow_html=True)
-            metar_winds = parse_multiple_wind(metar)
             st.markdown("Wind Components")
+            metar_winds = parse_multiple_wind(metar)
             if not metar_winds: st.info("Wind not reported or calm.")
             else:
                 true_hdgs, magn_hdgs = parse_runway_data(row['RWY_true_north(magn_north)'])
@@ -212,8 +210,8 @@ try:
                 taf_vis, taf_ceil = parse_weather_conditions(taf)
                 st.markdown("Procedures (GREEN: at or above minima | RED: below minima):", unsafe_allow_html=True)
                 st.markdown(format_grouped_procedures(procedures, taf_vis, taf_ceil), unsafe_allow_html=True)
-            taf_winds = parse_multiple_wind(taf)
             st.markdown("Forecast Wind Components")
+            taf_winds = parse_multiple_wind(taf)
             if not taf_winds: st.info("No specific wind forecast.")
             else:
                 true_hdgs, magn_hdgs = parse_runway_data(row['RWY_true_north(magn_north)'])
@@ -226,3 +224,4 @@ try:
 except Exception as e:
     st.error(f"Impossibile caricare o processare i file: {e}")
     st.exception(e)
+
