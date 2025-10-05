@@ -59,11 +59,25 @@ def parse_runway_data(data_string):
     if isinstance(data_string, str):
         pairs = data_string.strip().split(';')
         for pair in pairs:
-            match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)\s*$", pair.strip())
+            match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)$", pair.strip())
             if match:
                 true_hdgs.append(int(match.group(1)))
                 magn_hdgs.append(int(match.group(2)))
     return true_hdgs, magn_hdgs
+
+def format_grouped_procedures(procedures, vis, ceil):
+    if not procedures:
+        return ""
+    grouped_by_rwy = {}
+    for proc in procedures:
+        match = re.search(r'RWY\d{2}', proc['proc'])
+        rwy_key = match.group(0) if match else 'MISC'
+        if rwy_key not in grouped_by_rwy:
+            grouped_by_rwy[rwy_key] = []
+        color = 'green' if vis >= proc['vis'] and ceil >= proc['ceil'] else 'red'
+        grouped_by_rwy[rwy_key].append(f"<span style='color:{color};'>{proc['proc']}</span>")
+    output_lines = [f"<div>{'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(procs)}</div>" for rwy, procs in sorted(grouped_by_rwy.items())]
+    return "".join(output_lines)
 
 @st.cache_data(ttl=21600)
 def get_astronomy_data(lat, lon, api_key):
@@ -82,18 +96,12 @@ def get_astronomy_data(lat, lon, api_key):
         illum_str = data.get('moon_illumination_percentage', '0')
         illumination_percent = float(illum_str.replace('%','')) if illum_str else 0.0
         estimated_millilux = (illumination_percent / 100.0) * 0.25 * 1000
-        return {
-            "sunrise": to_utc(data.get("sunrise")), "sunset": to_utc(data.get("sunset")),
-            "moonrise": to_utc(data.get("moonrise")), "moonset": to_utc(data.get("moonset")),
-            "moon_phase": data.get("moon_phase", "N/A").replace("_", " ").title(),
-            "moon_luminosity": round(estimated_millilux)
-        }
+        return {"sunrise": to_utc(data.get("sunrise")), "sunset": to_utc(data.get("sunset")),"moonrise": to_utc(data.get("moonrise")), "moonset": to_utc(data.get("moonset")),"moon_phase": data.get("moon_phase", "N/A").replace("_", " ").title(),"moon_luminosity": round(estimated_millilux)}
     except Exception as e:
         st.warning(f"Non è stato possibile recuperare i dati astronomici: {e}")
         return None
 
-# --- FUNZIONE METEO CON CHIAVE DI REFRESH ---
-@st.cache_data
+@st.cache_data()
 def get_weather_data(icao, refresh_key):
     metar, taf = "METAR non disponibile", "TAF non disponibile"
     headers = {"User-Agent": "TotalStep-Streamlit-App/4.2"}
@@ -146,7 +154,8 @@ def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, max_wind
 
 # --- INTERFACCIA STREAMLIT ---
 st.set_page_config(layout="wide")
-st.title("Total Step")
+st.markdown("<h1 style='text-align: center;'>TOTAL STEP</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; font-size: 0.9em;'>by: angelo.corallo@am.difesa.it</p>", unsafe_allow_html=True)
 
 st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
 
@@ -164,7 +173,6 @@ try:
         first_airport_icao = first_airport_row['ICAO'].strip()
     else: lat, lon, first_airport_icao = None, None, None
 
-    # --- CHIAVE DI REFRESH ---
     refresh_key = int(now.timestamp() // 300)
 
     for index, row in airports_df.iterrows():
@@ -175,6 +183,7 @@ try:
             astro_data = get_astronomy_data(lat, lon, IPGEOLOCATION_API_KEY)
             if astro_data:
                 st.markdown(f"<div style='font-size: 0.9em;'>Sunrise: {astro_data['sunrise']} | Sunset: {astro_data['sunset']}<br>Moonrise: {astro_data['moonrise']} | Moonset: {astro_data['moonset']}<br>Moon Phase: {astro_data['moon_phase']} | Max Illumination: {astro_data['moon_luminosity']} millilux</div>", unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
 
         metar, taf = get_weather_data(icao, refresh_key)
         procedures = parse_procedures(row.get('(proc;ceil;vis)'))
@@ -185,8 +194,8 @@ try:
             st.text_area("METAR_area", metar, height=50, key=f"metar_{icao}", label_visibility="collapsed")
             if procedures:
                 metar_vis, metar_ceil = parse_weather_conditions(metar)
-                metar_procs = [f"<span style='color:{'green' if metar_vis >= p['vis'] and metar_ceil >= p['ceil'] else 'red'};'>{p['proc']}</span>" for p in procedures]
-                st.markdown(f"Procedures (GREEN: at or above minima | RED: below minima): {'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(metar_procs)}", unsafe_allow_html=True)
+                st.markdown("Procedures (GREEN: at or above minima | RED: below minima):", unsafe_allow_html=True)
+                st.markdown(format_grouped_procedures(procedures, metar_vis, metar_ceil), unsafe_allow_html=True)
             metar_winds = parse_multiple_wind(metar)
             st.markdown("Wind Components")
             if not metar_winds: st.info("Wind not reported or calm.")
@@ -201,8 +210,8 @@ try:
             st.text_area("TAF_area", taf, height=150, key=f"taf_{icao}", label_visibility="collapsed")
             if procedures:
                 taf_vis, taf_ceil = parse_weather_conditions(taf)
-                taf_procs = [f"<span style='color:{'green' if taf_vis >= p['vis'] and taf_ceil >= p['ceil'] else 'red'};'>{p['proc']}</span>" for p in procedures]
-                st.markdown(f"Procedures (GREEN: at or above minima | RED: below minima): {'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(taf_procs)}", unsafe_allow_html=True)
+                st.markdown("Procedures (GREEN: at or above minima | RED: below minima):", unsafe_allow_html=True)
+                st.markdown(format_grouped_procedures(procedures, taf_vis, taf_ceil), unsafe_allow_html=True)
             taf_winds = parse_multiple_wind(taf)
             st.markdown("Forecast Wind Components")
             if not taf_winds: st.info("No specific wind forecast.")
@@ -217,4 +226,3 @@ try:
 except Exception as e:
     st.error(f"Impossibile caricare o processare i file: {e}")
     st.exception(e)
-
