@@ -59,7 +59,7 @@ def parse_runway_data(data_string):
     if isinstance(data_string, str):
         pairs = data_string.strip().split(';')
         for pair in pairs:
-            match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)\s*$", pair.strip())
+            match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)$", pair.strip())
             if match:
                 true_hdgs.append(int(match.group(1)))
                 magn_hdgs.append(int(match.group(2)))
@@ -194,14 +194,18 @@ try:
                 metar_vis, metar_ceil = parse_weather_conditions(metar)
                 st.markdown("Procedures (GREEN: at or above minima | RED: below minima):", unsafe_allow_html=True)
                 st.markdown(format_grouped_procedures(procedures, metar_vis, metar_ceil), unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True) # Riga vuota tra procedure e wind
+            
             st.markdown("Wind Components")
             metar_winds = parse_multiple_wind(metar)
             if not metar_winds: st.info("Wind not reported or calm.")
             else:
                 true_hdgs, magn_hdgs = parse_runway_data(row['RWY_true_north(magn_north)'])
+                wind_lines = []
                 for true_hdg, magn_hdg in zip(true_hdgs, magn_hdgs):
                     max_hw, max_tw, max_cw, max_w = get_max_wind_components(metar_winds, true_hdg)
-                    st.markdown(f"{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}", unsafe_allow_html=True)
+                    wind_lines.append(f"{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}")
+                st.markdown("<br>".join(wind_lines), unsafe_allow_html=True)
         
         with col2:
             st.text("TAF")
@@ -210,18 +214,21 @@ try:
                 taf_vis, taf_ceil = parse_weather_conditions(taf)
                 st.markdown("Procedures (GREEN: at or above minima | RED: below minima):", unsafe_allow_html=True)
                 st.markdown(format_grouped_procedures(procedures, taf_vis, taf_ceil), unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True) # Riga vuota tra procedure e wind
+                
             st.markdown("Forecast Wind Components")
             taf_winds = parse_multiple_wind(taf)
             if not taf_winds: st.info("No specific wind forecast.")
             else:
                 true_hdgs, magn_hdgs = parse_runway_data(row['RWY_true_north(magn_north)'])
+                wind_lines = []
                 for true_hdg, magn_hdg in zip(true_hdgs, magn_hdgs):
                     max_hw, max_tw, max_cw, max_w = get_max_wind_components(taf_winds, true_hdg)
-                    st.markdown(f"{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}", unsafe_allow_html=True)
+                    wind_lines.append(f"{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}")
+                st.markdown("<br>".join(wind_lines), unsafe_allow_html=True)
 
         st.markdown("---")
 
 except Exception as e:
     st.error(f"Impossibile caricare o processare i file: {e}")
     st.exception(e)
-
