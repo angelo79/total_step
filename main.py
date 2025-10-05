@@ -79,7 +79,6 @@ def format_grouped_procedures(procedures, vis, ceil):
     output_lines = [f"<div>{'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(procs)}</div>" for rwy, procs in sorted(grouped_by_rwy.items())]
     return "".join(output_lines)
 
-# La cache sui dati astronomici può rimanere perché non necessitano di refresh frequente
 @st.cache_data(ttl=21600)
 def get_astronomy_data(lat, lon, api_key):
     params = {"apiKey": api_key, "lat": lat, "long": lon}
@@ -102,7 +101,7 @@ def get_astronomy_data(lat, lon, api_key):
         st.warning(f"Non è stato possibile recuperare i dati astronomici: {e}")
         return None
 
-# --- FUNZIONE METEO SENZA ALCUNA CACHE PER GARANTIRE IL REFRESH ---
+# --- FUNZIONE METEO: NESSUNA CACHE, SOLO DOWNLOAD DIRETTO ---
 def get_weather_data(icao):
     metar, taf = "METAR non disponibile", "TAF non disponibile"
     headers = {"User-Agent": "TotalStep-Streamlit-App/Final"}
