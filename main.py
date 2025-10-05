@@ -101,45 +101,20 @@ def get_astronomy_data(lat, lon, api_key):
         st.warning(f"Non è stato possibile recuperare i dati astronomici: {e}")
         return None
 
-# --- FUNZIONE METEO CON GESTIONE REFRESH FORZATO ---
-def get_weather_data_with_refresh(icao, force_refresh=False):
-    # Inizializza session_state se non esiste
-    if 'weather_cache' not in st.session_state:
-        st.session_state.weather_cache = {}
-    if 'last_update' not in st.session_state:
-        st.session_state.last_update = {}
-    
-    current_time = datetime.now()
-    cache_key = icao
-    
-    # Controlla se dobbiamo fare un nuovo download
-    should_download = (
-        force_refresh or 
-        cache_key not in st.session_state.weather_cache or
-        cache_key not in st.session_state.last_update or
-        (current_time - st.session_state.last_update[cache_key]).total_seconds() > 300  # 5 minuti
-    )
-    
-    if should_download:
-        metar, taf = "METAR non disponibile", "TAF non disponibile"
-        headers = {"User-Agent": "TotalStep-Streamlit-App/Final"}
-        try:
-            r_metar = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&hoursBeforeNow=2", headers=headers)
-            if r_metar.ok and r_metar.text: metar = r_metar.text.strip()
-        except requests.exceptions.RequestException: pass
-        try:
-            r_taf = requests.get(f"https://aviationweather.gov/api/data/taf?ids={icao}&format=raw&hoursBeforeNow=3", headers=headers)
-            if r_taf.ok and r_taf.text: taf = r_taf.text.strip()
-            elif r_taf.status_code == 404: taf = "TAF non emesso per questa stazione."
-        except requests.exceptions.RequestException: pass
-        
-        # Salva in cache
-        st.session_state.weather_cache[cache_key] = (metar, taf)
-        st.session_state.last_update[cache_key] = current_time
-        return metar, taf
-    else:
-        # Usa i dati dalla cache
-        return st.session_state.weather_cache[cache_key]
+# --- FUNZIONE METEO: NESSUNA CACHE, SOLO DOWNLOAD DIRETTO ---
+def get_weather_data(icao):
+    metar, taf = "METAR non disponibile", "TAF non disponibile"
+    headers = {"User-Agent": "TotalStep-Streamlit-App/Final"}
+    try:
+        r_metar = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&hoursBeforeNow=2", headers=headers)
+        if r_metar.ok and r_metar.text: metar = r_metar.text.strip()
+    except requests.exceptions.RequestException: pass
+    try:
+        r_taf = requests.get(f"https://aviationweather.gov/api/data/taf?ids={icao}&format=raw&hoursBeforeNow=3", headers=headers)
+        if r_taf.ok and r_taf.text: taf = r_taf.text.strip()
+        elif r_taf.status_code == 404: taf = "TAF non emesso per questa stazione."
+    except requests.exceptions.RequestException: pass
+    return metar, taf
 
 @st.cache_data
 def load_aircraft_limits(url):
@@ -183,8 +158,7 @@ st.set_page_config(layout="wide")
 st.markdown("<h1 style='text-align: center;'>TOTAL STEP</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; font-size: 0.9em;'>by: angelo.corallo@am.difesa.it</p>", unsafe_allow_html=True)
 
-# Auto-refresh ogni 5 minuti
-refresh_count = st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
+st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
 
 now = datetime.now(pytz.timezone('Europe/Rome'))
 st.info(f"Last update (local time): {now.strftime('%H:%M:%S on %d/%m/%Y')}")
@@ -210,8 +184,7 @@ try:
                 st.markdown(f"<div style='font-size: 0.9em;'>Sunrise: {astro_data['sunrise']} | Sunset: {astro_data['sunset']}<br>Moonrise: {astro_data['moonrise']} | Moonset: {astro_data['moonset']}<br>Moon Phase: {astro_data['moon_phase']} | Max Illumination: {astro_data['moon_luminosity']} millilux</div>", unsafe_allow_html=True)
                 st.markdown("<br>", unsafe_allow_html=True)
 
-        # Usa la nuova funzione con gestione del refresh
-        metar, taf = get_weather_data_with_refresh(icao, force_refresh=(refresh_count > 0))
+        metar, taf = get_weather_data(icao)
         procedures = parse_procedures(row.get('(proc;ceil;vis)'))
 
         col1, col2 = st.columns(2)
