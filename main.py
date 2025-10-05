@@ -32,16 +32,10 @@ def parse_coord(coord_str):
     except (ValueError, IndexError):
         return None, None
 
-# --- FUNZIONE OTTIMIZZATA CON CACHE GIORNALIERA ---
+# --- FUNZIONE OTTIMIZZATA CON CACHE A LUNGA DURATA ---
+@st.cache_data(ttl=21600)  # Cache per 6 ore
 def get_astronomy_data(lat, lon, api_key):
-    """Recupera dati astronomici usando una cache giornaliera in session_state."""
-    today = datetime.now(pytz.timezone('Europe/Rome')).date()
-    
-    # Controlla se i dati sono già in cache e sono validi per oggi
-    if 'astro_data' in st.session_state and st.session_state.get('astro_date') == today:
-        return st.session_state.astro_data
-
-    # Altrimenti, esegui la chiamata API
+    """Recupera dati astronomici da IPGeolocation."""
     params = {"apiKey": api_key, "lat": lat, "long": lon}
     try:
         response = requests.get("https://api.ipgeolocation.io/astronomy", params=params)
@@ -49,19 +43,19 @@ def get_astronomy_data(lat, lon, api_key):
         data = response.json()
         
         local_tz = pytz.timezone('Europe/Rome')
-        date_today_from_api = datetime.strptime(data['date'], '%Y-%m-%d').date()
+        date_today = datetime.strptime(data['date'], '%Y-%m-%d').date()
 
         def to_utc(time_str):
             if not time_str or time_str == "-:-": return "N/A"
             h, m = map(int, time_str.split(':'))
-            local_dt = local_tz.localize(datetime.combine(date_today_from_api, datetime.min.time())).replace(hour=h, minute=m)
+            local_dt = local_tz.localize(datetime.combine(date_today, datetime.min.time())).replace(hour=h, minute=m)
             return local_dt.astimezone(pytz.utc).strftime('%H:%MZ')
 
         illumination_percent = float(data.get('moon_illumination_percentage', '0').replace('%',''))
         max_moon_lux = 0.25 
         estimated_millilux = (illumination_percent / 100.0) * max_moon_lux * 1000
 
-        processed_data = {
+        return {
             "sunrise": to_utc(data.get("sunrise")),
             "sunset": to_utc(data.get("sunset")),
             "moonrise": to_utc(data.get("moonrise")),
@@ -69,20 +63,14 @@ def get_astronomy_data(lat, lon, api_key):
             "moon_phase": data.get("moon_phase", "N/A").replace("_", " ").title(),
             "moon_luminosity": round(estimated_millilux)
         }
-        
-        # Salva i nuovi dati e la data nella cache di sessione
-        st.session_state.astro_data = processed_data
-        st.session_state.astro_date = today
-        
-        return processed_data
     except Exception as e:
         st.warning(f"Non è stato possibile recuperare i dati astronomici: {e}")
         return None
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300) # Cache per 5 minuti
 def get_weather_data(icao):
     metar, taf = "METAR non disponibile", "TAF non disponibile"
-    headers = {"User-Agent": "TotalStep-Streamlit-App/3.2"}
+    headers = {"User-Agent": "TotalStep-Streamlit-App/3.3"}
     try:
         r_metar = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&hoursBeforeNow=2", headers=headers)
         if r_metar.ok and r_metar.text: metar = r_metar.text.strip()
@@ -99,18 +87,17 @@ def load_aircraft_limits(url):
     loaded_df.columns = loaded_df.columns.str.strip()
     return loaded_df.iloc[0].to_dict()
 
+# ... (le altre funzioni di parsing e calcolo rimangono invariate) ...
 def parse_multiple_wind_from_metar(metar):
     if not isinstance(metar, str): return []
     pattern = r"(\d{3})(\d{2,3})(?:G\d{2,3})?KT"
     matches = re.findall(pattern, metar)
     return [(int(direction), int(speed)) for direction, speed in matches if int(direction) != 0 or int(speed) != 0]
-
 def parse_multiple_wind_from_taf(taf):
     if not isinstance(taf, str): return []
     pattern = r"(\d{3})(\d{2,3})(?:G\d{2,3})?KT"
     matches = re.findall(pattern, taf)
     return [(int(direction), int(speed)) for direction, speed in matches if int(direction) != 0 or int(speed) != 0]
-
 def get_max_wind_components(winds, rwy_true_heading):
     max_headwind, max_tailwind, max_crosswind, max_wind = 0.0, 0.0, 0.0, 0.0
     for wind_dir, wind_speed in winds:
@@ -118,16 +105,12 @@ def get_max_wind_components(winds, rwy_true_heading):
         headwind_component = wind_speed * cos(angle_diff)
         crosswind_component = wind_speed * sin(angle_diff)
         max_wind = max(max_wind, wind_speed)
-        if headwind_component >= 0:
-            max_headwind = max(max_headwind, headwind_component)
-        else:
-            max_tailwind = max(max_tailwind, abs(headwind_component))
+        if headwind_component >= 0: max_headwind = max(max_headwind, headwind_component)
+        else: max_tailwind = max(max_tailwind, abs(headwind_component))
         max_crosswind = max(max_crosswind, abs(crosswind_component))
     return max_headwind, max_tailwind, max_crosswind, max_wind
-
 def format_runway_name(magnetic_heading):
     return f"RWY{round(magnetic_heading / 10):02d}"
-
 def parse_runway_data(data_string):
     true_hdgs, magn_hdgs = [], []
     if isinstance(data_string, str):
@@ -137,7 +120,6 @@ def parse_runway_data(data_string):
                 true_hdgs.append(int(match.group(1)))
                 magn_hdgs.append(int(match.group(2)))
     return true_hdgs, magn_hdgs
-
 def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, max_wind, limits):
     parts = []
     if max_headwind > 0.0:
@@ -157,19 +139,15 @@ def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, max_wind
     parts.append(f"<span style='color:{color_wind};'>Max Wind: {max_wind:.1f} kts</span>")
     return " | ".join(parts)
 
-
 # --- INTERFACCIA STREAMLIT ---
 st.set_page_config(layout="wide")
 st.title("Total Step")
 
-refresh_count = st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
-if refresh_count > 0:
-    # Pulisce solo le cache legate al meteo, non quella astronomica
-    st.cache_data.clear() 
-    streamlit_js_eval(js_expressions="parent.window.location.reload()")
+# --- MODIFICA: RIMOSSA PULIZIA DELLA CACHE DAI REFRESH ---
+st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
 if st.button("🔄 Manual Refresh"):
-    st.cache_data.clear()
-    streamlit_js_eval(js_expressions="parent.window.location.reload()")
+    st.rerun()
+
 now = datetime.now(pytz.timezone('Europe/Rome'))
 st.info(f"**Last update (local time): {now.strftime('%H:%M:%S on %d/%m/%Y')}**")
 
@@ -189,7 +167,6 @@ try:
 
     for index, row in airports_df.iterrows():
         icao, name = row["ICAO"].strip(), row["Name"].strip()
-
         st.subheader(f"{icao} - {name}")
         
         if icao == first_airport_icao and lat is not None:
