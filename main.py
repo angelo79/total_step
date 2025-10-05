@@ -174,9 +174,9 @@ try:
             if astro_data:
                 st.markdown(
                     f"<div style='font-size: 0.9em;'>"
-                    f"**Sunrise:** {astro_data['sunrise']} | **Sunset:** {astro_data['sunset']}<br>"
-                    f"**Moonrise:** {astro_data['moonrise']} | **Moonset:** {astro_data['moonset']}<br>"
-                    f"**Moon Phase:** {astro_data['moon_phase']} | **Max Illumination:** {astro_data['moon_luminosity']} millilux"
+                    f"Sunrise: {astro_data['sunrise']} | Sunset: {astro_data['sunset']}<br>"
+                    f"Moonrise: {astro_data['moonrise']} | Moonset: {astro_data['moonset']}<br>"
+                    f"Moon Phase: {astro_data['moon_phase']} | Max Illumination: {astro_data['moon_luminosity']} millilux"
                     "</div>", unsafe_allow_html=True
                 )
         
