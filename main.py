@@ -54,13 +54,13 @@ def parse_weather_conditions(report_str):
     ceiling = min(ceil_values) if ceil_values else 99999
     return visibility, ceiling
 
-# --- FUNZIONE CORRETTA PER PARSING PISTE ---
+# --- FUNZIONE CORRETTA E VERIFICATA PER PARSING PISTE ---
 def parse_runway_data(data_string):
     true_hdgs, magn_hdgs = [], []
     if isinstance(data_string, str):
-        for pair in data_string.split(';'):
-            # Questo pattern assicura di catturare solo la coppia di numeri
-            match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)\s*$", pair.strip())
+        pairs = data_string.strip().split(';')
+        for pair in pairs:
+            match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)$", pair.strip())
             if match:
                 true_hdgs.append(int(match.group(1)))
                 magn_hdgs.append(int(match.group(2)))
@@ -98,7 +98,7 @@ def get_astronomy_data(lat, lon, api_key):
 @st.cache_data(ttl=300)
 def get_weather_data(icao):
     metar, taf = "METAR non disponibile", "TAF non disponibile"
-    headers = {"User-Agent": "TotalStep-Streamlit-App/3.9"}
+    headers = {"User-Agent": "TotalStep-Streamlit-App/4.0"}
     try:
         r_metar = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&hoursBeforeNow=2", headers=headers)
         if r_metar.ok and r_metar.text: metar = r_metar.text.strip()
@@ -190,7 +190,7 @@ try:
             st.markdown("Wind Components")
             if not metar_winds: st.info("Wind not reported or calm.")
             else:
-                for true_hdg, magn_hdg in parse_runway_data(row['RWY_true_north(magn_north)']):
+                for true_hdg, magn_hdg in zip(*parse_runway_data(row['RWY_true_north(magn_north)'])):
                     max_hw, max_tw, max_cw, max_w = get_max_wind_components(metar_winds, true_hdg)
                     st.markdown(f"{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}", unsafe_allow_html=True)
         
@@ -205,7 +205,7 @@ try:
             st.markdown("Forecast Wind Components")
             if not taf_winds: st.info("No specific wind forecast.")
             else:
-                for true_hdg, magn_hdg in parse_runway_data(row['RWY_true_north(magn_north)']):
+                for true_hdg, magn_hdg in zip(*parse_runway_data(row['RWY_true_north(magn_north)'])):
                     max_hw, max_tw, max_cw, max_w = get_max_wind_components(taf_winds, true_hdg)
                     st.markdown(f"{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}", unsafe_allow_html=True)
 
