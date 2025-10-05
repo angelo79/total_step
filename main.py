@@ -59,6 +59,7 @@ def parse_runway_data(data_string):
     true_hdgs, magn_hdgs = [], []
     if isinstance(data_string, str):
         for pair in data_string.split(';'):
+            # Questo pattern assicura di catturare solo la coppia di numeri
             match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)\s*$", pair.strip())
             if match:
                 true_hdgs.append(int(match.group(1)))
@@ -97,7 +98,7 @@ def get_astronomy_data(lat, lon, api_key):
 @st.cache_data(ttl=300)
 def get_weather_data(icao):
     metar, taf = "METAR non disponibile", "TAF non disponibile"
-    headers = {"User-Agent": "TotalStep-Streamlit-App/3.8"}
+    headers = {"User-Agent": "TotalStep-Streamlit-App/3.9"}
     try:
         r_metar = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&hoursBeforeNow=2", headers=headers)
         if r_metar.ok and r_metar.text: metar = r_metar.text.strip()
