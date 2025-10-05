@@ -41,24 +41,29 @@ def parse_procedures(proc_str):
         except (ValueError, IndexError): continue
     return procedures
 
-# --- FUNZIONE CORRETTA PER PARSING METEO ---
 def parse_weather_conditions(report_str):
     if not isinstance(report_str, str): return 9999, 99999
-    
-    # Rimuove i gruppi data/ora per evitare falsi positivi sulla visibilità
     sanitized_report = re.sub(r'\b\d{2}\d{2}/\d{2}\d{2}\b', '', report_str)
     sanitized_report = re.sub(r'\b\d{6}Z\b', '', sanitized_report)
-
     vis_matches = re.findall(r'\b(\d{4})\b', sanitized_report)
     vis_values = [int(v) for v in vis_matches if len(v) == 4 and int(v) > 0]
     if "CAVOK" in sanitized_report: vis_values.append(9999)
     visibility = min(vis_values) if vis_values else 9999
-    
     ceil_matches = re.findall(r'\b(BKN|OVC)(\d{3})\b', sanitized_report)
     ceil_values = [int(height) * 100 for code, height in ceil_matches]
     ceiling = min(ceil_values) if ceil_values else 99999
-    
     return visibility, ceiling
+
+# --- FUNZIONE CORRETTA PER PARSING PISTE ---
+def parse_runway_data(data_string):
+    true_hdgs, magn_hdgs = [], []
+    if isinstance(data_string, str):
+        for pair in data_string.split(';'):
+            match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)\s*$", pair.strip())
+            if match:
+                true_hdgs.append(int(match.group(1)))
+                magn_hdgs.append(int(match.group(2)))
+    return true_hdgs, magn_hdgs
 
 @st.cache_data(ttl=21600)
 def get_astronomy_data(lat, lon, api_key):
@@ -92,7 +97,7 @@ def get_astronomy_data(lat, lon, api_key):
 @st.cache_data(ttl=300)
 def get_weather_data(icao):
     metar, taf = "METAR non disponibile", "TAF non disponibile"
-    headers = {"User-Agent": "TotalStep-Streamlit-App/3.7"}
+    headers = {"User-Agent": "TotalStep-Streamlit-App/3.8"}
     try:
         r_metar = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&hoursBeforeNow=2", headers=headers)
         if r_metar.ok and r_metar.text: metar = r_metar.text.strip()
@@ -128,16 +133,6 @@ def get_max_wind_components(winds, rwy_true_heading):
 
 def format_runway_name(magnetic_heading):
     return f"RWY{round(magnetic_heading / 10):02d}"
-
-def parse_runway_data(data_string):
-    true_hdgs, magn_hdgs = [], []
-    if isinstance(data_string, str):
-        for pair in data_string.split(';'):
-            match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)\s*$", pair.strip())
-            if match:
-                true_hdgs.append(int(match.group(1)))
-                magn_hdgs.append(int(match.group(2)))
-    return true_hdgs, magn_hdgs
 
 def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, max_wind, limits):
     parts = []
@@ -189,7 +184,7 @@ try:
             if procedures:
                 metar_vis, metar_ceil = parse_weather_conditions(metar)
                 metar_procs = [f"<span style='color:{'green' if metar_vis >= p['vis'] and metar_ceil >= p['ceil'] else 'red'};'>{p['proc']}</span>" for p in procedures]
-                st.markdown(f"Applicable Procedures: {'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(metar_procs)}", unsafe_allow_html=True)
+                st.markdown(f"Procedures (GREEN: at or above minima | RED: below minima): {'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(metar_procs)}", unsafe_allow_html=True)
             metar_winds = parse_multiple_wind(metar)
             st.markdown("Wind Components")
             if not metar_winds: st.info("Wind not reported or calm.")
@@ -204,7 +199,7 @@ try:
             if procedures:
                 taf_vis, taf_ceil = parse_weather_conditions(taf)
                 taf_procs = [f"<span style='color:{'green' if taf_vis >= p['vis'] and taf_ceil >= p['ceil'] else 'red'};'>{p['proc']}</span>" for p in procedures]
-                st.markdown(f"Applicable Procedures: {'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(taf_procs)}", unsafe_allow_html=True)
+                st.markdown(f"Procedures (GREEN: at or above minima | RED: below minima): {'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(taf_procs)}", unsafe_allow_html=True)
             taf_winds = parse_multiple_wind(taf)
             st.markdown("Forecast Wind Components")
             if not taf_winds: st.info("No specific wind forecast.")
@@ -218,4 +213,3 @@ try:
 except Exception as e:
     st.error(f"Impossibile caricare o processare i file: {e}")
     st.exception(e)
-
