@@ -23,8 +23,15 @@ url_limits = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/{BRAN
 
 # --- FUNZIONI DI PARSING E CALCOLO ---
 
+def parse_coord(coord_str):
+    if pd.isna(coord_str) or coord_str.strip() == '': return None, None
+    try:
+        lat_str, lon_str = coord_str.split(';')
+        return float(lat_str), float(lon_str)
+    except (ValueError, IndexError): return None, None
+
 def parse_procedures(proc_str):
-    if pd.isna(proc_str): return []
+    if pd.isna(proc_str) or not isinstance(proc_str, str): return []
     pattern = r'\(([^;]+);([^;]+);([^)]+)\)'
     matches = re.findall(pattern, proc_str)
     procedures = []
@@ -34,23 +41,24 @@ def parse_procedures(proc_str):
         except (ValueError, IndexError): continue
     return procedures
 
+# --- FUNZIONE CORRETTA PER PARSING METEO ---
 def parse_weather_conditions(report_str):
-    if not isinstance(report_str, str): return None, None
-    vis_matches = re.findall(r'\b(\d{4})\b', report_str)
+    if not isinstance(report_str, str): return 9999, 99999
+    
+    # Rimuove i gruppi data/ora per evitare falsi positivi sulla visibilità
+    sanitized_report = re.sub(r'\b\d{2}\d{2}/\d{2}\d{2}\b', '', report_str)
+    sanitized_report = re.sub(r'\b\d{6}Z\b', '', sanitized_report)
+
+    vis_matches = re.findall(r'\b(\d{4})\b', sanitized_report)
     vis_values = [int(v) for v in vis_matches if len(v) == 4 and int(v) > 0]
-    if "CAVOK" in report_str: vis_values.append(9999)
+    if "CAVOK" in sanitized_report: vis_values.append(9999)
     visibility = min(vis_values) if vis_values else 9999
-    ceil_matches = re.findall(r'\b(BKN|OVC)(\d{3})\b', report_str)
+    
+    ceil_matches = re.findall(r'\b(BKN|OVC)(\d{3})\b', sanitized_report)
     ceil_values = [int(height) * 100 for code, height in ceil_matches]
     ceiling = min(ceil_values) if ceil_values else 99999
+    
     return visibility, ceiling
-
-def parse_coord(coord_str):
-    if pd.isna(coord_str) or coord_str.strip() == '': return None, None
-    try:
-        lat_str, lon_str = coord_str.split(';')
-        return float(lat_str), float(lon_str)
-    except (ValueError, IndexError): return None, None
 
 @st.cache_data(ttl=21600)
 def get_astronomy_data(lat, lon, api_key):
@@ -66,20 +74,25 @@ def get_astronomy_data(lat, lon, api_key):
             h, m = map(int, time_str.split(':'))
             local_dt = local_tz.localize(datetime.combine(date_today, datetime.min.time())).replace(hour=h, minute=m)
             return local_dt.astimezone(pytz.utc).strftime('%H:%MZ')
-        illumination_percent = float(data.get('moon_illumination_percentage', '0').replace('%',''))
+        
+        illum_str = data.get('moon_illumination_percentage', '0')
+        illumination_percent = float(illum_str.replace('%','')) if illum_str else 0.0
         estimated_millilux = (illumination_percent / 100.0) * 0.25 * 1000
+        
         return {
             "sunrise": to_utc(data.get("sunrise")), "sunset": to_utc(data.get("sunset")),
             "moonrise": to_utc(data.get("moonrise")), "moonset": to_utc(data.get("moonset")),
             "moon_phase": data.get("moon_phase", "N/A").replace("_", " ").title(),
             "moon_luminosity": round(estimated_millilux)
         }
-    except Exception: return None
+    except Exception as e:
+        st.warning(f"Non è stato possibile recuperare i dati astronomici: {e}")
+        return None
 
 @st.cache_data(ttl=300)
 def get_weather_data(icao):
     metar, taf = "METAR non disponibile", "TAF non disponibile"
-    headers = {"User-Agent": "TotalStep-Streamlit-App/3.5"}
+    headers = {"User-Agent": "TotalStep-Streamlit-App/3.7"}
     try:
         r_metar = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&hoursBeforeNow=2", headers=headers)
         if r_metar.ok and r_metar.text: metar = r_metar.text.strip()
@@ -92,7 +105,9 @@ def get_weather_data(icao):
     return metar, taf
 
 def load_aircraft_limits(url):
-    return pd.read_csv(url, dtype=float).iloc[0].to_dict()
+    df = pd.read_csv(url, dtype=float)
+    df.columns = df.columns.str.strip()
+    return df.iloc[0].to_dict()
 
 def parse_multiple_wind(report_str):
     if not isinstance(report_str, str): return []
@@ -135,13 +150,11 @@ def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, max_wind
     parts.append(f"<span style='color:{'red' if max_wind >= limits['max_wind'] else 'green'};'>Max Wind: {max_wind:.1f} kts</span>")
     return " | ".join(parts)
 
-
 # --- INTERFACCIA STREAMLIT ---
 st.set_page_config(layout="wide")
 st.title("Total Step")
 
 st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
-if st.button("🔄 Manual Refresh"): st.rerun()
 
 now = datetime.now(pytz.timezone('Europe/Rome'))
 st.info(f"Last update (local time): {now.strftime('%H:%M:%S on %d/%m/%Y')}")
@@ -165,48 +178,40 @@ try:
             astro_data = get_astronomy_data(lat, lon, IPGEOLOCATION_API_KEY)
             if astro_data:
                 st.markdown(f"<div style='font-size: 0.9em;'>Sunrise: {astro_data['sunrise']} | Sunset: {astro_data['sunset']}<br>Moonrise: {astro_data['moonrise']} | Moonset: {astro_data['moonset']}<br>Moon Phase: {astro_data['moon_phase']} | Max Illumination: {astro_data['moon_luminosity']} millilux</div>", unsafe_allow_html=True)
-        
+
         metar, taf = get_weather_data(icao)
-        col1, col2 = st.columns(2)
-        col1.text_area("METAR", metar, height=50, key=f"metar_{icao}_{index}")
-        col2.text_area("TAF", taf, height=150, key=f"taf_{icao}_{index}")
-        
-        true_hdgs, magn_hdgs = parse_runway_data(row['RWY_true_north(magn_north)'])
         procedures = parse_procedures(row.get('(proc;ceil;vis)'))
-        
-        # --- SEZIONE METAR ---
-        st.markdown("METAR Wind Components")
-        metar_vis, metar_ceil = parse_weather_conditions(metar)
-        if procedures:
-            metar_procs = []
-            for proc in procedures:
-                metar_ok = metar_vis >= proc['vis'] and metar_ceil >= proc['ceil']
-                metar_procs.append(f"<span style='color:{'green' if metar_ok else 'red'};'>{proc['proc']}</span>")
-            st.markdown(f"Applicable Procedures: {'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(metar_procs)}", unsafe_allow_html=True)
 
-        metar_winds = parse_multiple_wind(metar)
-        if not metar_winds: st.info("Wind not reported or calm in METAR.")
-        else:
-            for true_hdg, magn_hdg in zip(true_hdgs, magn_hdgs):
-                max_hw, max_tw, max_cw, max_w = get_max_wind_components(metar_winds, true_hdg)
-                st.markdown(f"{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}", unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.text("METAR")
+            st.text_area("METAR_area", metar, height=50, key=f"metar_{icao}", label_visibility="collapsed")
+            if procedures:
+                metar_vis, metar_ceil = parse_weather_conditions(metar)
+                metar_procs = [f"<span style='color:{'green' if metar_vis >= p['vis'] and metar_ceil >= p['ceil'] else 'red'};'>{p['proc']}</span>" for p in procedures]
+                st.markdown(f"Applicable Procedures: {'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(metar_procs)}", unsafe_allow_html=True)
+            metar_winds = parse_multiple_wind(metar)
+            st.markdown("Wind Components")
+            if not metar_winds: st.info("Wind not reported or calm.")
+            else:
+                for true_hdg, magn_hdg in parse_runway_data(row['RWY_true_north(magn_north)']):
+                    max_hw, max_tw, max_cw, max_w = get_max_wind_components(metar_winds, true_hdg)
+                    st.markdown(f"{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}", unsafe_allow_html=True)
         
-        # --- SEZIONE TAF ---
-        st.markdown("TAF Forecast Wind Components")
-        taf_vis, taf_ceil = parse_weather_conditions(taf)
-        if procedures:
-            taf_procs = []
-            for proc in procedures:
-                taf_ok = taf_vis >= proc['vis'] and taf_ceil >= proc['ceil']
-                taf_procs.append(f"<span style='color:{'green' if taf_ok else 'red'};'>{proc['proc']}</span>")
-            st.markdown(f"Applicable Procedures: {'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(taf_procs)}", unsafe_allow_html=True)
-
-        taf_winds = parse_multiple_wind(taf)
-        if not taf_winds: st.info("No specific wind forecast in TAF.")
-        else:
-            for true_hdg, magn_hdg in zip(true_hdgs, magn_hdgs):
-                max_hw, max_tw, max_cw, max_w = get_max_wind_components(taf_winds, true_hdg)
-                st.markdown(f"{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}", unsafe_allow_html=True)
+        with col2:
+            st.text("TAF")
+            st.text_area("TAF_area", taf, height=150, key=f"taf_{icao}", label_visibility="collapsed")
+            if procedures:
+                taf_vis, taf_ceil = parse_weather_conditions(taf)
+                taf_procs = [f"<span style='color:{'green' if taf_vis >= p['vis'] and taf_ceil >= p['ceil'] else 'red'};'>{p['proc']}</span>" for p in procedures]
+                st.markdown(f"Applicable Procedures: {'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(taf_procs)}", unsafe_allow_html=True)
+            taf_winds = parse_multiple_wind(taf)
+            st.markdown("Forecast Wind Components")
+            if not taf_winds: st.info("No specific wind forecast.")
+            else:
+                for true_hdg, magn_hdg in parse_runway_data(row['RWY_true_north(magn_north)']):
+                    max_hw, max_tw, max_cw, max_w = get_max_wind_components(taf_winds, true_hdg)
+                    st.markdown(f"{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}", unsafe_allow_html=True)
 
         st.markdown("---")
 
