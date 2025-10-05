@@ -59,7 +59,7 @@ def parse_runway_data(data_string):
     if isinstance(data_string, str):
         pairs = data_string.strip().split(';')
         for pair in pairs:
-            match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)$", pair.strip())
+            match = re.match(r"^\s*(\d+)\s*\(\s*(\d+)\s*\)\s*$", pair.strip())
             if match:
                 true_hdgs.append(int(match.group(1)))
                 magn_hdgs.append(int(match.group(2)))
@@ -101,10 +101,10 @@ def get_astronomy_data(lat, lon, api_key):
         st.warning(f"Non è stato possibile recuperare i dati astronomici: {e}")
         return None
 
-@st.cache_data()
-def get_weather_data(icao, refresh_key):
+# --- FUNZIONE METEO SENZA CACHE PER GARANTIRE IL REFRESH ---
+def get_weather_data(icao):
     metar, taf = "METAR non disponibile", "TAF non disponibile"
-    headers = {"User-Agent": "TotalStep-Streamlit-App/4.5"}
+    headers = {"User-Agent": "TotalStep-Streamlit-App/4.6"}
     try:
         r_metar = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&hoursBeforeNow=2", headers=headers)
         if r_metar.ok and r_metar.text: metar = r_metar.text.strip()
@@ -157,7 +157,7 @@ st.set_page_config(layout="wide")
 st.markdown("<h1 style='text-align: center;'>TOTAL STEP</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; font-size: 0.9em;'>by: angelo.corallo@am.difesa.it</p>", unsafe_allow_html=True)
 
-refresh_count = st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
+st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
 
 now = datetime.now(pytz.timezone('Europe/Rome'))
 st.info(f"Last update (local time): {now.strftime('%H:%M:%S on %d/%m/%Y')}")
@@ -183,7 +183,7 @@ try:
                 st.markdown(f"<div style='font-size: 0.9em;'>Sunrise: {astro_data['sunrise']} | Sunset: {astro_data['sunset']}<br>Moonrise: {astro_data['moonrise']} | Moonset: {astro_data['moonset']}<br>Moon Phase: {astro_data['moon_phase']} | Max Illumination: {astro_data['moon_luminosity']} millilux</div>", unsafe_allow_html=True)
                 st.markdown("<br>", unsafe_allow_html=True)
 
-        metar, taf = get_weather_data(icao, refresh_count)
+        metar, taf = get_weather_data(icao)
         procedures = parse_procedures(row.get('(proc;ceil;vis)'))
 
         col1, col2 = st.columns(2)
