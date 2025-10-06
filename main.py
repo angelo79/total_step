@@ -123,69 +123,35 @@ def load_aircraft_limits(url):
 
 def parse_multiple_wind(report_str):
     if not isinstance(report_str, str): return []
-    pattern = r"(VRB|\d{3})(\d{2,3})(?:G(\d{2,3}))?KT"
+    pattern = r"(\d{3})(\d{2,3})(?:G\d{2,3})?KT"
     matches = re.findall(pattern, report_str)
-    winds = []
-    for direction, speed, gust in matches:
-        speed_int = int(speed)
-        gust_int = int(gust) if gust else speed_int
-        if direction == "VRB":
-            winds.append(("VRB", speed_int, gust_int))
-        else:
-            dir_int = int(direction)
-            if dir_int != 0 or speed_int != 0:
-                winds.append((dir_int, speed_int, gust_int))
-    return winds
+    return [(int(d), int(s)) for d, s in matches if int(d) != 0 or int(s) != 0]
 
-def get_wind_components_for_runway(winds, rwy_true_heading):
-    """Calcola le componenti del vento per una specifica pista"""
-    max_hw, max_tw, max_cw = 0.0, 0.0, 0.0
-    for wind_data in winds:
-        if wind_data[0] == "VRB":
-            # Vento variabile: non possiamo calcolare componenti direzionali
-            continue
-        wind_dir, wind_speed, wind_gust = wind_data
-        # Usa la raffica se presente, altrimenti la velocità
-        effective_speed = wind_gust
+def get_max_wind_components(winds, rwy_true_heading):
+    max_hw, max_tw, max_cw, max_w = 0.0, 0.0, 0.0, 0.0
+    for wind_dir, wind_speed in winds:
         angle_diff = radians(wind_dir - rwy_true_heading)
-        headwind_comp = effective_speed * cos(angle_diff)
-        if headwind_comp >= 0:
-            max_hw = max(max_hw, headwind_comp)
-        else:
-            max_tw = max(max_tw, abs(headwind_comp))
-        max_cw = max(max_cw, abs(effective_speed * sin(angle_diff)))
-    return max_hw, max_tw, max_cw
-
-def get_max_wind_from_report(winds):
-    """Restituisce la velocità massima del vento (considerando raffiche)"""
-    if not winds:
-        return 0.0
-    max_wind = 0.0
-    for wind_data in winds:
-        if wind_data[0] == "VRB":
-            _, speed, gust = wind_data
-        else:
-            _, speed, gust = wind_data
-        max_wind = max(max_wind, gust)
-    return max_wind
+        headwind_comp = wind_speed * cos(angle_diff)
+        if headwind_comp >= 0: max_hw = max(max_hw, headwind_comp)
+        else: max_tw = max(max_tw, abs(headwind_comp))
+        max_cw = max(max_cw, abs(wind_speed * sin(angle_diff)))
+        max_w = max(max_w, wind_speed)
+    return max_hw, max_tw, max_cw, max_w
 
 def format_runway_name(magnetic_heading):
     return f"RWY{round(magnetic_heading / 10):02d}"
 
 def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, max_wind, limits):
     parts = []
-    if max_headwind > 0.0:
+    if max_headwind > 0.0: 
         color_hw = 'red' if max_headwind > limits.get('max_headwind', 40) else 'green'
         parts.append(f"<span style='color:{color_hw};'>Max Headwind: {max_headwind:.1f} kts</span>")
-    if max_tailwind > 0.0:
+    if max_tailwind > 0.0: 
         color_tw = 'red' if max_tailwind > limits.get('max_tailwind', 10) else 'green'
         parts.append(f"<span style='color:{color_tw};'>Max Tailwind: {max_tailwind:.1f} kts</span>")
-    if max_crosswind > limits.get('max_crosswind_dry', 25):
-        color_cw = "red"
-    elif max_crosswind > limits.get('max_crosswind_wet', 20):
-        color_cw = "orange"
-    else:
-        color_cw = "green"
+    if max_crosswind > limits.get('max_crosswind_dry', 25): color_cw = "red"
+    elif max_crosswind > limits.get('max_crosswind_wet', 20): color_cw = "orange"
+    else: color_cw = "green"
     parts.append(f"<span style='color:{color_cw};'>Max Crosswind: {max_crosswind:.1f} kt</span>")
     color_w = 'red' if max_wind > limits.get('max_wind', 35) else 'green'
     parts.append(f"<span style='color:{color_w};'>Max Wind: {max_wind:.1f} kts</span>")
@@ -237,16 +203,13 @@ try:
             
             st.markdown("Wind Components")
             metar_winds = parse_multiple_wind(metar)
-            if not metar_winds:
-                st.info("Wind not reported or calm.")
+            if not metar_winds: st.info("Wind not reported or calm.")
             else:
-                # Calcola Max Wind UNA SOLA VOLTA per l'aeroporto
-                max_wind_airport = get_max_wind_from_report(metar_winds)
                 true_hdgs, magn_hdgs = parse_runway_data(row['RWY_true_north(magn_north)'])
                 wind_lines = []
                 for true_hdg, magn_hdg in zip(true_hdgs, magn_hdgs):
-                    max_hw, max_tw, max_cw = get_wind_components_for_runway(metar_winds, true_hdg)
-                    wind_lines.append(f"<div>{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_wind_airport, aircraft_limits)}</div>")
+                    max_hw, max_tw, max_cw, max_w = get_max_wind_components(metar_winds, true_hdg)
+                    wind_lines.append(f"<div>{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}</div>")
                 st.markdown("".join(wind_lines), unsafe_allow_html=True)
         
         with col2:
@@ -260,16 +223,13 @@ try:
                 
             st.markdown("Forecast Wind Components")
             taf_winds = parse_multiple_wind(taf)
-            if not taf_winds:
-                st.info("No specific wind forecast.")
+            if not taf_winds: st.info("No specific wind forecast.")
             else:
-                # Calcola Max Wind UNA SOLA VOLTA per l'aeroporto
-                max_wind_airport = get_max_wind_from_report(taf_winds)
                 true_hdgs, magn_hdgs = parse_runway_data(row['RWY_true_north(magn_north)'])
                 wind_lines = []
                 for true_hdg, magn_hdg in zip(true_hdgs, magn_hdgs):
-                    max_hw, max_tw, max_cw = get_wind_components_for_runway(taf_winds, true_hdg)
-                    wind_lines.append(f"<div>{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_wind_airport, aircraft_limits)}</div>")
+                    max_hw, max_tw, max_cw, max_w = get_max_wind_components(taf_winds, true_hdg)
+                    wind_lines.append(f"<div>{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}</div>")
                 st.markdown("".join(wind_lines), unsafe_allow_html=True)
 
         st.markdown("---")
