@@ -118,9 +118,17 @@ def get_weather_data(icao):
 
 @st.cache_data
 def load_aircraft_limits(url):
-    df = pd.read_csv(url, dtype=float)
+    df = pd.read_csv(url)
     df.columns = df.columns.str.strip()
-    return df.iloc[0].to_dict()
+    # Converte esplicitamente i valori in float
+    limits = {
+        'max_wind': float(df['max_wind'].iloc[0]),
+        'max_headwind': float(df['max_headwind'].iloc[0]),
+        'max_tailwind': float(df['max_tailwind'].iloc[0]),
+        'max_crosswind_dry': float(df['max_crosswind_dry'].iloc[0]),
+        'max_crosswind_wet': float(df['max_crosswind_wet'].iloc[0])
+    }
+    return limits
 
 def parse_multiple_wind(report_str):
     if not isinstance(report_str, str): return []
@@ -144,13 +152,15 @@ def format_runway_name(magnetic_heading):
 
 def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, max_wind, limits):
     parts = []
-    if max_headwind > 0.0: parts.append(f"<span style='color:{'red' if max_headwind >= limits['max_headwind'] else 'green'};'>Max Headwind: {max_headwind:.1f} kts</span>")
-    if max_tailwind > 0.0: parts.append(f"<span style='color:{'red' if max_tailwind >= limits['max_tailwind'] else 'green'};'>Max Tailwind: {max_tailwind:.1f} kts</span>")
-    if max_crosswind >= limits['max_crosswind_dry']: color_cw = "red"
-    elif max_crosswind >= limits['max_crosswind_wet']: color_cw = "orange"
+    if max_headwind > 0.0: 
+        parts.append(f"<span style='color:{'red' if max_headwind > limits['max_headwind'] else 'green'};'>Max Headwind: {max_headwind:.1f} kts</span>")
+    if max_tailwind > 0.0: 
+        parts.append(f"<span style='color:{'red' if max_tailwind > limits['max_tailwind'] else 'green'};'>Max Tailwind: {max_tailwind:.1f} kts</span>")
+    if max_crosswind > limits['max_crosswind_dry']: color_cw = "red"
+    elif max_crosswind > limits['max_crosswind_wet']: color_cw = "orange"
     else: color_cw = "green"
     parts.append(f"<span style='color:{color_cw};'>Max Crosswind: {max_crosswind:.1f} kt</span>")
-    parts.append(f"<span style='color:{'red' if max_wind >= limits['max_wind'] else 'green'};'>Max Wind: {max_wind:.1f} kts</span>")
+    parts.append(f"<span style='color:{'red' if max_wind > limits['max_wind'] else 'green'};'>Max Wind: {max_wind:.1f} kts</span>")
     return " | ".join(parts)
 
 # --- INTERFACCIA STREAMLIT ---
