@@ -169,8 +169,8 @@ st.set_page_config(layout="wide")
 
 st.markdown("""
 <div style='text-align: center;'>
-    <h1>TOTAL STEP</h1>
-    <p style='font-size: 0.9em;'>by: angelo.corallo@am.difesa.it</p>
+    <h1 style='margin: 0; padding: 0;'>TOTAL STEP</h1>
+    <p style='margin: 0; padding: 0; font-size: 0.9em;'>by: angelo.corallo@am.difesa.it</p>
 </div>
 """, unsafe_allow_html=True)
 
