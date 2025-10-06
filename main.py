@@ -143,18 +143,13 @@ def format_runway_name(magnetic_heading):
 
 def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, max_wind, limits):
     parts = []
-    if max_headwind > 0.0: 
-        color_hw = 'red' if max_headwind > limits.get('max_headwind', 40) else 'green'
-        parts.append(f"<span style='color:{color_hw};'>Max Headwind: {max_headwind:.1f} kts</span>")
-    if max_tailwind > 0.0: 
-        color_tw = 'red' if max_tailwind > limits.get('max_tailwind', 10) else 'green'
-        parts.append(f"<span style='color:{color_tw};'>Max Tailwind: {max_tailwind:.1f} kts</span>")
-    if max_crosswind > limits.get('max_crosswind_dry', 25): color_cw = "red"
-    elif max_crosswind > limits.get('max_crosswind_wet', 20): color_cw = "orange"
+    if max_headwind > 0.0: parts.append(f"<span style='color:{'red' if max_headwind >= limits['max_headwind'] else 'green'};'>Max Headwind: {max_headwind:.1f} kts</span>")
+    if max_tailwind > 0.0: parts.append(f"<span style='color:{'red' if max_tailwind >= limits['max_tailwind'] else 'green'};'>Max Tailwind: {max_tailwind:.1f} kts</span>")
+    if max_crosswind >= limits['max_crosswind_dry']: color_cw = "red"
+    elif max_crosswind >= limits['max_crosswind_wet']: color_cw = "orange"
     else: color_cw = "green"
     parts.append(f"<span style='color:{color_cw};'>Max Crosswind: {max_crosswind:.1f} kt</span>")
-    color_w = 'red' if max_wind > limits.get('max_wind', 35) else 'green'
-    parts.append(f"<span style='color:{color_w};'>Max Wind: {max_wind:.1f} kts</span>")
+    parts.append(f"<span style='color:{'red' if max_wind >= limits['max_wind'] else 'green'};'>Max Wind: {max_wind:.1f} kts</span>")
     return " | ".join(parts)
 
 # --- INTERFACCIA STREAMLIT ---
