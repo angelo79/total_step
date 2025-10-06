@@ -168,11 +168,23 @@ def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, max_wind
 st.set_page_config(layout="wide")
 
 st.markdown("""
-<div style='text-align: center; width: 100%;'>
-    <div style='display: inline-block; text-align: center;'>
-        <h1 style='margin: 0; padding: 0; white-space: nowrap;'>TOTAL STEP</h1>
-        <p style='margin: 0; padding: 0; font-size: 0.9em; white-space: nowrap;'>by: angelo.corallo@am.difesa.it</p>
-    </div>
+<style>
+.centered-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+.centered-text h1,
+.centered-text p {
+    margin: 0 !important;
+    padding: 0 !important;
+    text-align: center !important;
+}
+</style>
+<div class="centered-text">
+    <h1>TOTAL STEP</h1>
+    <p style='font-size: 0.9em;'>by: angelo.corallo@am.difesa.it</p>
 </div>
 """, unsafe_allow_html=True)
 
