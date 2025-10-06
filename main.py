@@ -101,7 +101,6 @@ def get_astronomy_data(lat, lon, api_key):
         st.warning(f"Non è stato possibile recuperare i dati astronomici: {e}")
         return None
 
-# --- FUNZIONE METEO: NESSUNA CACHE, SOLO DOWNLOAD DIRETTO ---
 def get_weather_data(icao):
     metar, taf = "METAR non disponibile", "TAF non disponibile"
     headers = {"User-Agent": "TotalStep-Streamlit-App/Final"}
@@ -118,17 +117,9 @@ def get_weather_data(icao):
 
 @st.cache_data
 def load_aircraft_limits(url):
-    df = pd.read_csv(url)
+    df = pd.read_csv(url, dtype=float)
     df.columns = df.columns.str.strip()
-    # Converte esplicitamente i valori in float
-    limits = {
-        'max_wind': float(df['max_wind'].iloc[0]),
-        'max_headwind': float(df['max_headwind'].iloc[0]),
-        'max_tailwind': float(df['max_tailwind'].iloc[0]),
-        'max_crosswind_dry': float(df['max_crosswind_dry'].iloc[0]),
-        'max_crosswind_wet': float(df['max_crosswind_wet'].iloc[0])
-    }
-    return limits
+    return df.iloc[0].to_dict()
 
 def parse_multiple_wind(report_str):
     if not isinstance(report_str, str): return []
@@ -153,20 +144,23 @@ def format_runway_name(magnetic_heading):
 def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, max_wind, limits):
     parts = []
     if max_headwind > 0.0: 
-        parts.append(f"<span style='color:{'red' if max_headwind > limits['max_headwind'] else 'green'};'>Max Headwind: {max_headwind:.1f} kts</span>")
+        color_hw = 'red' if max_headwind > limits.get('max_headwind', 40) else 'green'
+        parts.append(f"<span style='color:{color_hw};'>Max Headwind: {max_headwind:.1f} kts</span>")
     if max_tailwind > 0.0: 
-        parts.append(f"<span style='color:{'red' if max_tailwind > limits['max_tailwind'] else 'green'};'>Max Tailwind: {max_tailwind:.1f} kts</span>")
-    if max_crosswind > limits['max_crosswind_dry']: color_cw = "red"
-    elif max_crosswind > limits['max_crosswind_wet']: color_cw = "orange"
+        color_tw = 'red' if max_tailwind > limits.get('max_tailwind', 10) else 'green'
+        parts.append(f"<span style='color:{color_tw};'>Max Tailwind: {max_tailwind:.1f} kts</span>")
+    if max_crosswind > limits.get('max_crosswind_dry', 25): color_cw = "red"
+    elif max_crosswind > limits.get('max_crosswind_wet', 20): color_cw = "orange"
     else: color_cw = "green"
     parts.append(f"<span style='color:{color_cw};'>Max Crosswind: {max_crosswind:.1f} kt</span>")
-    parts.append(f"<span style='color:{'red' if max_wind > limits['max_wind'] else 'green'};'>Max Wind: {max_wind:.1f} kts</span>")
+    color_w = 'red' if max_wind > limits.get('max_wind', 35) else 'green'
+    parts.append(f"<span style='color:{color_w};'>Max Wind: {max_wind:.1f} kts</span>")
     return " | ".join(parts)
 
 # --- INTERFACCIA STREAMLIT ---
 st.set_page_config(layout="wide")
 st.markdown("<h1 style='text-align: center;'>TOTAL STEP</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: right; font-size: 0.9em;'>by: angelo.corallo@am.difesa.it</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; font-size: 0.9em;'>by: angelo.corallo@am.difesa.it</p>", unsafe_allow_html=True)
 
 st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
 
@@ -213,6 +207,7 @@ try:
             else:
                 true_hdgs, magn_hdgs = parse_runway_data(row['RWY_true_north(magn_north)'])
                 wind_lines = []
+                # CORREZIONE: usa true_hdg invece di magn_hdg per i calcoli
                 for true_hdg, magn_hdg in zip(true_hdgs, magn_hdgs):
                     max_hw, max_tw, max_cw, max_w = get_max_wind_components(metar_winds, true_hdg)
                     wind_lines.append(f"<div>{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}</div>")
@@ -233,6 +228,7 @@ try:
             else:
                 true_hdgs, magn_hdgs = parse_runway_data(row['RWY_true_north(magn_north)'])
                 wind_lines = []
+                # CORREZIONE: usa true_hdg invece di magn_hdg per i calcoli
                 for true_hdg, magn_hdg in zip(true_hdgs, magn_hdgs):
                     max_hw, max_tw, max_cw, max_w = get_max_wind_components(taf_winds, true_hdg)
                     wind_lines.append(f"<div>{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}</div>")
