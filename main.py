@@ -166,7 +166,7 @@ def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, max_wind
 # --- INTERFACCIA STREAMLIT ---
 st.set_page_config(layout="wide")
 st.markdown("<h1 style='text-align: center;'>TOTAL STEP</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; font-size: 0.9em;'>by: angelo.corallo@am.difesa.it        </p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; font-size: 0.9em;'>by: angelo.corallo@am.difesa.it                                </p>", unsafe_allow_html=True)
 
 st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
 
