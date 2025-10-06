@@ -123,13 +123,30 @@ def load_aircraft_limits(url):
 
 def parse_multiple_wind(report_str):
     if not isinstance(report_str, str): return []
-    pattern = r"(\d{3})(\d{2,3})(?:G\d{2,3})?KT"
+    # Pattern aggiornato per gestire anche VRB (vento variabile)
+    pattern = r"(VRB|\d{3})(\d{2,3})(?:G\d{2,3})?KT"
     matches = re.findall(pattern, report_str)
-    return [(int(d), int(s)) for d, s in matches if int(d) != 0 or int(s) != 0]
+    winds = []
+    for direction, speed in matches:
+        speed_int = int(speed)
+        if direction == "VRB":
+            # Per vento variabile, non possiamo calcolare componenti direzionali
+            # Restituiamo solo la velocità totale con direzione fittizia
+            if speed_int > 0:
+                winds.append((0, speed_int))  # Direzione 0 (segnaposto), velocità reale
+        else:
+            dir_int = int(direction)
+            if dir_int != 0 or speed_int != 0:
+                winds.append((dir_int, speed_int))
+    return winds
 
 def get_max_wind_components(winds, rwy_true_heading):
     max_hw, max_tw, max_cw, max_w = 0.0, 0.0, 0.0, 0.0
     for wind_dir, wind_speed in winds:
+        # Se direzione è 0, è un segnaposto per VRB - consideriamo solo max wind
+        if wind_dir == 0:
+            max_w = max(max_w, wind_speed)
+            continue
         angle_diff = radians(wind_dir - rwy_true_heading)
         headwind_comp = wind_speed * cos(angle_diff)
         if headwind_comp >= 0: max_hw = max(max_hw, headwind_comp)
@@ -207,7 +224,6 @@ try:
             else:
                 true_hdgs, magn_hdgs = parse_runway_data(row['RWY_true_north(magn_north)'])
                 wind_lines = []
-                # CORREZIONE: usa true_hdg invece di magn_hdg per i calcoli
                 for true_hdg, magn_hdg in zip(true_hdgs, magn_hdgs):
                     max_hw, max_tw, max_cw, max_w = get_max_wind_components(metar_winds, true_hdg)
                     wind_lines.append(f"<div>{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}</div>")
@@ -228,7 +244,6 @@ try:
             else:
                 true_hdgs, magn_hdgs = parse_runway_data(row['RWY_true_north(magn_north)'])
                 wind_lines = []
-                # CORREZIONE: usa true_hdg invece di magn_hdg per i calcoli
                 for true_hdg, magn_hdg in zip(true_hdgs, magn_hdgs):
                     max_hw, max_tw, max_cw, max_w = get_max_wind_components(taf_winds, true_hdg)
                     wind_lines.append(f"<div>{format_runway_name(magn_hdg)}: {get_colored_wind_display(max_hw, max_tw, max_cw, max_w, aircraft_limits)}</div>")
