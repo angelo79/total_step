@@ -101,6 +101,7 @@ def get_astronomy_data(lat, lon, api_key):
         st.warning(f"Non è stato possibile recuperare i dati astronomici: {e}")
         return None
 
+# --- FUNZIONE METEO: NESSUNA CACHE, SOLO DOWNLOAD DIRETTO ---
 def get_weather_data(icao):
     metar, taf = "METAR non disponibile", "TAF non disponibile"
     headers = {"User-Agent": "TotalStep-Streamlit-App/Final"}
