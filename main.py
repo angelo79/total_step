@@ -158,6 +158,28 @@ st.set_page_config(layout="wide")
 st.markdown("<h1 style='text-align: center;'>TOTAL STEP</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: right; font-size: 0.9em;'>by: angelo.corallo@am.difesa.it</p>", unsafe_allow_html=True)
 
+html_code = """
+<div style="font-family: Arial, sans-serif; font-size: 0.9em; text-align: left;">
+    <p style="margin: 0 0 5px 0;"><b>Updated to amendments:</b></p>
+    <table style="border-collapse: collapse; border: 1px solid black; font-size: 0.95em;">
+        <tr style="background-color: #f2f2f2;">
+            <th style="border: 1px solid black; padding: 4px 8px; text-align: center;"></th>
+            <th style="border: 1px solid black; padding: 4px 8px; text-align: center;">Number/Year</th>
+            <th style="border: 1px solid black; padding: 4px 8px; text-align: center;">Publication date</th>
+            <th style="border: 1px solid black; padding: 4px 8px; text-align: center;">Effective date</th>
+        </tr>
+        <tr>
+            <td style="border: 1px solid black; padding: 4px 8px; text-align: center;"><b>AIRAC</b></td>
+            <td style="border: 1px solid black; padding: 4px 8px; text-align: center;">A10/25</td>
+            <td style="border: 1px solid black; padding: 4px 8px; text-align: center;">21 AUG 2025</td>
+            <td style="border: 1px solid black; padding: 4px 8px; text-align: center;">02 OCT 2025</td>
+        </tr>
+    </table>
+    <p style="margin-top: 10px;"><b>Next Publication:</b> 30 Oct 2025 (AIRAC A11/25)</p>
+</div>
+"""
+st.markdown(html_code, unsafe_allow_html=True)
+
 st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
 
 now = datetime.now(pytz.timezone('Europe/Rome'))
