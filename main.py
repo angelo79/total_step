@@ -190,7 +190,7 @@ try:
         col1, col2 = st.columns(2)
         with col1:
             st.text("METAR")
-            st.text_area("METAR_area", metar, height=100, key=f"metar_{icao}", label_visibility="collapsed")
+            st.text_area("METAR_area", metar, height=130, key=f"metar_{icao}", label_visibility="collapsed")
             if procedures:
                 metar_vis, metar_ceil = parse_weather_conditions(metar)
                 st.markdown("Procedures (GREEN: at or above minima | RED: below minima):", unsafe_allow_html=True)
@@ -210,7 +210,7 @@ try:
         
         with col2:
             st.text("TAF")
-            st.text_area("TAF_area", taf, height=100, key=f"taf_{icao}", label_visibility="collapsed")
+            st.text_area("TAF_area", taf, height=130, key=f"taf_{icao}", label_visibility="collapsed")
             if procedures:
                 taf_vis, taf_ceil = parse_weather_conditions(taf)
                 st.markdown("Procedures (GREEN: at or above minima | RED: below minima):", unsafe_allow_html=True)
