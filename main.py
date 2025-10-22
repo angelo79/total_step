@@ -156,7 +156,7 @@ def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, max_wind
 # --- INTERFACCIA STREAMLIT ---
 st.set_page_config(layout="wide")
 st.markdown("<h1 style='text-align: center;'>TOTAL STEP</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; font-size: 0.9em;'>by: angelo.corallo@am.difesa.it</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: right; font-size: 0.9em;'>by: angelo.corallo@am.difesa.it</p>", unsafe_allow_html=True)
 
 st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh_counter")
 
@@ -190,7 +190,7 @@ try:
         col1, col2 = st.columns(2)
         with col1:
             st.text("METAR")
-            st.text_area("METAR_area", metar, height=50, key=f"metar_{icao}", label_visibility="collapsed")
+            st.text_area("METAR_area", metar, height=100, key=f"metar_{icao}", label_visibility="collapsed")
             if procedures:
                 metar_vis, metar_ceil = parse_weather_conditions(metar)
                 st.markdown("Procedures (GREEN: at or above minima | RED: below minima):", unsafe_allow_html=True)
@@ -210,7 +210,7 @@ try:
         
         with col2:
             st.text("TAF")
-            st.text_area("TAF_area", taf, height=150, key=f"taf_{icao}", label_visibility="collapsed")
+            st.text_area("TAF_area", taf, height=100, key=f"taf_{icao}", label_visibility="collapsed")
             if procedures:
                 taf_vis, taf_ceil = parse_weather_conditions(taf)
                 st.markdown("Procedures (GREEN: at or above minima | RED: below minima):", unsafe_allow_html=True)
