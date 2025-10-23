@@ -162,7 +162,7 @@ html_code = """
 <div style="font-family: Arial, sans-serif; font-size: 0.9em; text-align: left;">
     <p style="margin: 0 0 5px 0;"><b>Updated to amendments:</b></p>
     <table style="border-collapse: collapse; border: 1px solid black; font-size: 0.95em;">
-        <tr style="background-color: #f2f2f2;">
+        <tr>
             <th style="border: 1px solid black; padding: 4px 8px; text-align: center;"></th>
             <th style="border: 1px solid black; padding: 4px 8px; text-align: center;">Number/Year</th>
             <th style="border: 1px solid black; padding: 4px 8px; text-align: center;">Publication date</th>
