@@ -165,15 +165,16 @@ st.markdown("<h1 style='text-align: center;'>TOTAL STEP</h1>", unsafe_allow_html
 st.markdown("<p style='text-align: right; font-size: 0.9em;'>by: angelo.corallo@am.difesa.it</p>", unsafe_allow_html=True)
 
 html_code = f"""
-<p><b>Updated to amendments:</b></p>
+<p style="margin: 0 0 5px 0"><b>Updated to amendments:</b></p>
 <table style="border-collapse: collapse; border: 1px solid black; font-size: 0.95em;">
     <tr>
+        <th style="border: 1px solid black; padding: 4px 8px; text-align: center;"></th>
         <th style="border: 1px solid black; padding: 4px 8px; text-align: center;">Number/Year</th>
         <th style="border: 1px solid black; padding: 4px 8px; text-align: center;">Publication date</th>
         <th style="border: 1px solid black; padding: 4px 8px; text-align: center;">Effective date</th>
     </tr>
     <tr>
-        <td style="border: 1px solid black; padding: 4px 8px; text-align: center;">AIRAC</td>
+        <td style="border: 1px solid black; padding: 4px 8px; text-align: center;"><b>AIRAC</b></td>
         <td style="border: 1px solid black; padding: 4px 8px; text-align: center;">{AIRAC_NUMBER}</td>
         <td style="border: 1px solid black; padding: 4px 8px; text-align: center;">{AIRAC_PUBLICATION_DATE}</td>
         <td style="border: 1px solid black; padding: 4px 8px; text-align: center;">{AIRAC_EFFECTIVE_DATE}</td>
