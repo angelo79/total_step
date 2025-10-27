@@ -158,13 +158,28 @@ def format_runway_name(magnetic_heading):
     return f"RWY {round(magnetic_heading / 10):02d}"
 
 def get_colored_wind_display(max_headwind, max_tailwind, max_crosswind, max_wind, limits):
+    """
+    Genera una stringa HTML per visualizzare i componenti del vento con colori basati sui limiti.
+    """
     parts = []
-    if max_headwind > 0.0: parts.append(f"<span style='color:{\"red\" if max_headwind > limits['max_headwind'] else \"green\"}'>Max Headwind: {max_headwind:.1f} kts</span>")
-    if max_tailwind > 0.0: parts.append(f"<span style='color:{\"red\" if max_tailwind > limits['max_tailwind'] else \"green\"}'>Max Tailwind: {max_tailwind:.1f} kts</span>")
-    color_cw = "red" if max_crosswind > limits['max_crosswind_dry'] else ("orange" if max_crosswind > limits['max_crosswind_wet'] else "green")
+
+    # Correzione: Utilizzo di apici singoli per 'red' e 'green' dentro la f-string
+    if max_headwind > 0.0:
+        parts.append(f"<span style='color:{'red' if max_headwind > limits['max_headwind'] else 'green'}'>Max Headwind: {max_headwind:.1f} kts</span>")
+
+    # Correzione: Utilizzo di apici singoli per 'red' e 'green' dentro la f-string
+    if max_tailwind > 0.0:
+        parts.append(f"<span style='color:{'red' if max_tailwind > limits['max_tailwind'] else 'green'}'>Max Tailwind: {max_tailwind:.1f} kts</span>")
+
+    # La logica per il crosswind era già corretta, ma la mantengo per completezza
+    color_cw = 'red' if max_crosswind > limits['max_crosswind_dry'] else 'orange' if max_crosswind > limits['max_crosswind_wet'] else 'green'
     parts.append(f"<span style='color:{color_cw}'>Max Crosswind: {max_crosswind:.1f} kts</span>")
-    parts.append(f"<span style='color:{\"red\" if max_wind > limits['max_wind'] else \"green\"}'>Max Wind: {max_wind:.1f} kts</span>")
-    return " | ".join(parts)
+
+    # Correzione: Utilizzo di apici singoli per 'red' e 'green' dentro la f-string
+    parts.append(f"<span style='color:{'red' if max_wind > limits['max_wind'] else 'green'}'>Max Wind: {max_wind:.1f} kts</span>")
+
+    return ' | '.join(parts)
+
     
 # --- NUOVE FUNZIONI PER ALTERNATO METEO ---
 def estrai_fasce_TAF(taf_str):
