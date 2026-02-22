@@ -1,0 +1,11 @@
+ICAO,Name,RWY_true_north(magn_north),coord,(proc;ceil;vis)
+EEEI,Amari,71(61);251(241),59.259921;24.2062964,
+EETN,Tallinn,90(81);270(261),,
+EYSA,Siauliai,146(136);326(316),,
+EVGA,Lielvarde,7(359);187(179),,
+EYKA,Kaunas,85(77);265(257),,
+EFHK,Helsinki,48(38);228(218);153(143);333(323),,
+EFTP,Tampere,64(54),244(234),,
+EYPA,Palanga,13(7);193(187),,
+EYVI,Vilnius,21(13);201(193),,
+EVRA,Riga,5(355);185(175),,
