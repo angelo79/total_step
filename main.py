@@ -129,10 +129,20 @@ def load_aircraft_limits(url):
     return df.iloc[0].to_dict()
 
 def parse_multiple_wind(report_str):
-    if not isinstance(report_str, str): return []
-    pattern = r"(\d{3})(\d{2,3})(?:G\d{2,3})?KT"
+    if not isinstance(report_str, str):
+        return []
+    # Gruppo di cattura aggiunto per la raffica: (?:G(\d{2,3}))?
+    pattern = r'(\d{3})(\d{2,3})(?:G(\d{2,3}))?KT'
     matches = re.findall(pattern, report_str)
-    return [(int(d), int(s)) for d, s in matches if int(d) != 0 or int(s) != 0]
+    result = []
+    for d, s, g in matches:
+        direction = int(d)
+        speed     = int(s)
+        # Se presente la raffica (g != ''), è il worst case → si usa per i calcoli
+        effective_speed = int(g) if g else speed
+        if direction != 0 or effective_speed != 0:
+            result.append((direction, effective_speed))
+    return result
 
 def get_max_wind_components(winds, rwy_true_heading):
     max_hw, max_tw, max_cw, max_w = 0.0, 0.0, 0.0, 0.0
